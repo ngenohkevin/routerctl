@@ -18,6 +18,8 @@ import {
   Power,
   Edit3,
   WifiOff,
+  ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +32,23 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { Device } from '@/types';
 import { cn, getSignalQuality, formatBandwidth, formatDuration } from '@/lib/utils';
+
+function formatBytes(bytes: string | undefined): string {
+  if (!bytes) return '0 B';
+  const num = parseInt(bytes, 10);
+  if (isNaN(num)) return '0 B';
+
+  if (num >= 1024 * 1024 * 1024) {
+    return `${(num / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+  if (num >= 1024 * 1024) {
+    return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (num >= 1024) {
+    return `${(num / 1024).toFixed(1)} KB`;
+  }
+  return `${num} B`;
+}
 
 interface DeviceCardProps {
   device: Device;
@@ -275,6 +294,22 @@ export function DeviceCard({
               <div className="flex items-center gap-1">
                 <SignalIcon className={cn('h-4 w-4', signalColor)} />
                 <span>{device.signalStrength}</span>
+              </div>
+            </div>
+          )}
+          {/* Bandwidth usage - only show if device has queue stats */}
+          {(device.bytesIn || device.bytesOut) && (
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Bandwidth</span>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="flex items-center gap-0.5 text-green-500">
+                  <ArrowDown className="h-3 w-3" />
+                  {formatBytes(device.bytesIn)}
+                </span>
+                <span className="flex items-center gap-0.5 text-blue-500">
+                  <ArrowUp className="h-3 w-3" />
+                  {formatBytes(device.bytesOut)}
+                </span>
               </div>
             </div>
           )}

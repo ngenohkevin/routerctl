@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Router, RefreshCw, Wifi, Cable, Ban } from 'lucide-react';
+import Link from 'next/link';
+import { Router, RefreshCw, Wifi, Cable, Ban, Settings, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,7 +13,9 @@ import { AgentStatus } from '@/components/agent-status';
 import { BandwidthDialog } from '@/components/bandwidth-dialog';
 import { RenameDialog } from '@/components/rename-dialog';
 import { PriorityDialog } from '@/components/priority-dialog';
+import { RebootDialog } from '@/components/reboot-dialog';
 import { useDevicesStore } from '@/stores/devices';
+import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import type { Device } from '@/types';
 
@@ -70,6 +73,16 @@ export default function Dashboard() {
     fetchHealth();
     fetchDevices();
     fetchSystemInfo();
+  };
+
+  const handleReboot = async () => {
+    try {
+      await api.rebootRouter();
+      toast.success('Router is rebooting. It will be back online shortly.');
+    } catch (error) {
+      toast.error('Failed to reboot router');
+      throw error;
+    }
   };
 
   const handleSetBandwidth = (mac: string) => {
@@ -192,12 +205,30 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
             <AgentStatus health={health} isConnected={isConnected} />
-            <Button variant="outline" size="sm" onClick={handleRefresh}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              <Link href="/traffic">
+                <Button variant="outline" size="sm">
+                  <Activity className="h-4 w-4 mr-2" />
+                  Traffic
+                </Button>
+              </Link>
+              <Link href="/settings">
+                <Button variant="outline" size="sm">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Settings
+                </Button>
+              </Link>
+              <RebootDialog
+                onReboot={handleReboot}
+                disabled={!health?.routerConnected}
+              />
+              <Button variant="outline" size="sm" onClick={handleRefresh}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+            </div>
           </div>
         </div>
 
