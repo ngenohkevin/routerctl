@@ -10,7 +10,10 @@ import { DeviceCard } from '@/components/device-card';
 import { SystemStatus } from '@/components/system-status';
 import { AgentStatus } from '@/components/agent-status';
 import { BandwidthDialog } from '@/components/bandwidth-dialog';
+import { RenameDialog } from '@/components/rename-dialog';
+import { PriorityDialog } from '@/components/priority-dialog';
 import { useDevicesStore } from '@/stores/devices';
+import { toast } from 'sonner';
 import type { Device } from '@/types';
 
 export default function Dashboard() {
@@ -29,11 +32,19 @@ export default function Dashboard() {
     unblockDevice,
     setBandwidthLimit,
     removeBandwidthLimit,
+    disconnectDevice,
+    setDeviceName,
+    setDevicePriority,
+    removeDevicePriority,
+    wakeOnLan,
     subscribeToEvents,
   } = useDevicesStore();
 
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [bandwidthDialogOpen, setBandwidthDialogOpen] = useState(false);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [priorityDialogOpen, setPriorityDialogOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ mac: string; currentName: string } | null>(null);
 
   useEffect(() => {
     // Initial fetch
@@ -66,6 +77,70 @@ export default function Dashboard() {
     if (device) {
       setSelectedDevice(device);
       setBandwidthDialogOpen(true);
+    }
+  };
+
+  const handleRename = (mac: string, currentName: string) => {
+    setRenameTarget({ mac, currentName });
+    setRenameDialogOpen(true);
+  };
+
+  const handleBoost = (mac: string) => {
+    const device = devices.find((d) => d.mac === mac);
+    if (device) {
+      setSelectedDevice(device);
+      setPriorityDialogOpen(true);
+    }
+  };
+
+  const handleDisconnect = async (mac: string) => {
+    try {
+      await disconnectDevice(mac);
+      toast.success('Device disconnected');
+    } catch {
+      toast.error('Failed to disconnect device');
+    }
+  };
+
+  const handleWakeOnLan = async (mac: string) => {
+    try {
+      await wakeOnLan(mac);
+      toast.success('Wake on LAN packet sent');
+    } catch {
+      toast.error('Failed to send Wake on LAN');
+    }
+  };
+
+  const handleSaveRename = async (name: string) => {
+    if (!renameTarget) return;
+    try {
+      await setDeviceName(renameTarget.mac, name);
+      toast.success('Device renamed');
+      setRenameDialogOpen(false);
+    } catch {
+      toast.error('Failed to rename device');
+    }
+  };
+
+  const handleSavePriority = async (priority: number) => {
+    if (!selectedDevice) return;
+    try {
+      await setDevicePriority(selectedDevice.mac, priority);
+      toast.success('Priority set');
+      setPriorityDialogOpen(false);
+    } catch {
+      toast.error('Failed to set priority');
+    }
+  };
+
+  const handleRemovePriority = async () => {
+    if (!selectedDevice) return;
+    try {
+      await removeDevicePriority(selectedDevice.mac);
+      toast.success('Priority removed');
+      setPriorityDialogOpen(false);
+    } catch {
+      toast.error('Failed to remove priority');
     }
   };
 
@@ -213,6 +288,10 @@ export default function Dashboard() {
                         onBlock={blockDevice}
                         onUnblock={unblockDevice}
                         onSetBandwidth={handleSetBandwidth}
+                        onDisconnect={handleDisconnect}
+                        onBoost={handleBoost}
+                        onRename={handleRename}
+                        onWakeOnLan={handleWakeOnLan}
                       />
                     ))}
                   </div>
@@ -228,6 +307,10 @@ export default function Dashboard() {
                       onBlock={blockDevice}
                       onUnblock={unblockDevice}
                       onSetBandwidth={handleSetBandwidth}
+                      onDisconnect={handleDisconnect}
+                      onBoost={handleBoost}
+                      onRename={handleRename}
+                      onWakeOnLan={handleWakeOnLan}
                     />
                   ))}
                 </div>
@@ -242,6 +325,10 @@ export default function Dashboard() {
                       onBlock={blockDevice}
                       onUnblock={unblockDevice}
                       onSetBandwidth={handleSetBandwidth}
+                      onDisconnect={handleDisconnect}
+                      onBoost={handleBoost}
+                      onRename={handleRename}
+                      onWakeOnLan={handleWakeOnLan}
                     />
                   ))}
                 </div>
@@ -256,6 +343,10 @@ export default function Dashboard() {
                       onBlock={blockDevice}
                       onUnblock={unblockDevice}
                       onSetBandwidth={handleSetBandwidth}
+                      onDisconnect={handleDisconnect}
+                      onBoost={handleBoost}
+                      onRename={handleRename}
+                      onWakeOnLan={handleWakeOnLan}
                     />
                   ))}
                 </div>
@@ -282,6 +373,21 @@ export default function Dashboard() {
         onOpenChange={setBandwidthDialogOpen}
         onSetLimit={setBandwidthLimit}
         onRemoveLimit={removeBandwidthLimit}
+      />
+
+      <RenameDialog
+        open={renameDialogOpen}
+        onOpenChange={setRenameDialogOpen}
+        currentName={renameTarget?.currentName || ''}
+        onSave={handleSaveRename}
+      />
+
+      <PriorityDialog
+        device={selectedDevice}
+        open={priorityDialogOpen}
+        onOpenChange={setPriorityDialogOpen}
+        onSetPriority={handleSavePriority}
+        onRemovePriority={handleRemovePriority}
       />
     </div>
   );

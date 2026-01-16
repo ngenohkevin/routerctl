@@ -106,3 +106,65 @@ export interface BandwidthResponse {
 export interface InterfacesResponse {
   interfaces: InterfaceInfo[];
 }
+
+// New types for additional features
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  startTime: string;
+  interval: string;
+  onEvent: string;
+  nextRun: string;
+  runCount: string;
+  comment?: string;
+  disabled: boolean;
+}
+
+export interface DnsCacheEntry {
+  name: string;
+  type: string;
+  data: string;
+  ttl: string;
+  static: boolean;
+}
+
+export interface PingResult {
+  host: string;
+  sent: number;
+  received: number;
+  packetLoss: string;
+  minRtt: string;
+  avgRtt: string;
+  maxRtt: string;
+}
+
+export interface SpeedTestResult {
+  status: string;
+  duration: string;
+  txCurrent: string;
+  rxCurrent: string;
+  txTotalAvg: string;
+  rxTotalAvg: string;
+  lostPackets: string;
+}
+
+export interface TrafficStats {
+  interface: string;
+  rxBytes: string;
+  txBytes: string;
+  rxPackets: string;
+  txPackets: string;
+  rxRate?: string;
+  txRate?: string;
+}
+
+export interface QueueStats {
+  name: string;
+  target: string;
+  rate: string;
+  bytesIn: string;
+  bytesOut: string;
+  packetsIn: string;
+  packetsOut: string;
+  dropped: string;
+}

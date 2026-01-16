@@ -19,6 +19,11 @@ interface DevicesState {
   unblockDevice: (mac: string) => Promise<void>;
   setBandwidthLimit: (mac: string, upload: string, download: string) => Promise<void>;
   removeBandwidthLimit: (mac: string) => Promise<void>;
+  disconnectDevice: (mac: string) => Promise<void>;
+  setDeviceName: (mac: string, name: string) => Promise<void>;
+  setDevicePriority: (mac: string, priority: number) => Promise<void>;
+  removeDevicePriority: (mac: string) => Promise<void>;
+  wakeOnLan: (mac: string) => Promise<void>;
   setDevices: (devices: Device[]) => void;
   setSystemInfo: (systemInfo: SystemInfo) => void;
   setError: (error: string | null) => void;
@@ -142,6 +147,71 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to remove bandwidth limit',
+      });
+      throw error;
+    }
+  },
+
+  disconnectDevice: async (mac: string) => {
+    try {
+      await api.disconnectDevice(mac);
+      // Refresh devices list after disconnecting
+      get().fetchDevices();
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to disconnect device',
+      });
+      throw error;
+    }
+  },
+
+  setDeviceName: async (mac: string, name: string) => {
+    try {
+      await api.setDeviceName(mac, name);
+      set((state) => ({
+        devices: state.devices.map((d) =>
+          d.mac === mac ? { ...d, hostname: name, comment: name } : d
+        ),
+      }));
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to set device name',
+      });
+      throw error;
+    }
+  },
+
+  setDevicePriority: async (mac: string, priority: number) => {
+    try {
+      await api.setDevicePriority(mac, priority);
+      // Refresh to get updated device data
+      get().fetchDevices();
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to set device priority',
+      });
+      throw error;
+    }
+  },
+
+  removeDevicePriority: async (mac: string) => {
+    try {
+      await api.removeDevicePriority(mac);
+      get().fetchDevices();
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to remove device priority',
+      });
+      throw error;
+    }
+  },
+
+  wakeOnLan: async (mac: string) => {
+    try {
+      await api.wakeOnLan(mac);
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to send Wake on LAN',
       });
       throw error;
     }

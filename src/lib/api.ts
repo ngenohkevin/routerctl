@@ -5,6 +5,12 @@ import type {
   InterfacesResponse,
   HealthStatus,
   Device,
+  ScheduledTask,
+  DnsCacheEntry,
+  PingResult,
+  SpeedTestResult,
+  TrafficStats,
+  QueueStats,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -97,6 +103,94 @@ export const api = {
 
   async getInterfaces(): Promise<InterfacesResponse> {
     return fetchApi<InterfacesResponse>('/interfaces');
+  },
+
+  // Device Management
+  async setDeviceName(mac: string, name: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/name`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  async disconnectDevice(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/disconnect`, {
+      method: 'POST',
+    });
+  },
+
+  async wakeOnLan(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/wol`, {
+      method: 'POST',
+    });
+  },
+
+  async setDevicePriority(mac: string, priority: number): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/priority`, {
+      method: 'POST',
+      body: JSON.stringify({ priority }),
+    });
+  },
+
+  async removeDevicePriority(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/priority`, {
+      method: 'DELETE',
+    });
+  },
+
+  // System Control
+  async rebootRouter(): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/system/reboot', { method: 'POST' });
+  },
+
+  async getScheduledTasks(): Promise<{ tasks: ScheduledTask[] }> {
+    return fetchApi<{ tasks: ScheduledTask[] }>('/scheduler');
+  },
+
+  async scheduleReboot(name: string, startTime: string, interval: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/scheduler/reboot', {
+      method: 'POST',
+      body: JSON.stringify({ name, startTime, interval }),
+    });
+  },
+
+  async removeScheduledTask(name: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/scheduler/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // DNS
+  async getDnsCache(): Promise<{ entries: DnsCacheEntry[]; count: number }> {
+    return fetchApi<{ entries: DnsCacheEntry[]; count: number }>('/dns/cache');
+  },
+
+  async flushDnsCache(): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/dns/flush', { method: 'POST' });
+  },
+
+  // Network Tools
+  async runPing(host: string, count: number = 4): Promise<{ result: PingResult }> {
+    return fetchApi<{ result: PingResult }>('/tools/ping', {
+      method: 'POST',
+      body: JSON.stringify({ host, count }),
+    });
+  },
+
+  async runSpeedTest(server: string, duration: number = 10): Promise<{ result: SpeedTestResult }> {
+    return fetchApi<{ result: SpeedTestResult }>('/tools/speedtest', {
+      method: 'POST',
+      body: JSON.stringify({ server, duration }),
+    });
+  },
+
+  // Traffic Statistics
+  async getTrafficStats(): Promise<{ stats: TrafficStats[] }> {
+    return fetchApi<{ stats: TrafficStats[] }>('/traffic');
+  },
+
+  async getQueueStats(): Promise<{ stats: QueueStats[] }> {
+    return fetchApi<{ stats: QueueStats[] }>('/queues');
   },
 
   // SSE Events
