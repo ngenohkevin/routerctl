@@ -70,26 +70,26 @@ export default function TrafficPage() {
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </Link>
-            <Activity className="h-8 w-8 text-primary" />
+            <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold">Network Traffic</h1>
-              <p className="text-muted-foreground text-sm">
+              <h1 className="text-lg sm:text-2xl font-bold">Network Traffic</h1>
+              <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
                 Real-time bandwidth monitoring
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <AgentStatus health={health} isConnected={!!health?.routerConnected} />
-            <Button variant="outline" size="sm" onClick={fetchData}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+            <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3" onClick={fetchData}>
+              <RefreshCw className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
         </div>

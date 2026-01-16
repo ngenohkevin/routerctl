@@ -195,38 +195,42 @@ export default function Dashboard() {
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Router className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-2xl font-bold">RouterCtl</h1>
-              <p className="text-muted-foreground text-sm">
-                Router Management Dashboard
-              </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Router className="h-7 w-7 md:h-8 md:w-8 text-primary" />
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold">RouterCtl</h1>
+                <p className="text-muted-foreground text-xs md:text-sm hidden sm:block">
+                  Router Management Dashboard
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2 md:gap-3 flex-wrap">
             <AgentStatus health={health} isConnected={isConnected} />
-            <div className="flex items-center gap-2">
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Link href="/traffic">
-                <Button variant="outline" size="sm">
-                  <Activity className="h-4 w-4 mr-2" />
-                  Traffic
+                <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3">
+                  <Activity className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Traffic</span>
                 </Button>
               </Link>
               <Link href="/settings">
-                <Button variant="outline" size="sm">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
+                <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3">
+                  <Settings className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Settings</span>
                 </Button>
               </Link>
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <RebootDialog
                 onReboot={handleReboot}
                 disabled={!health?.routerConnected}
               />
-              <Button variant="outline" size="sm" onClick={handleRefresh}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
+              <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3" onClick={handleRefresh}>
+                <RefreshCw className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Refresh</span>
               </Button>
             </div>
           </div>

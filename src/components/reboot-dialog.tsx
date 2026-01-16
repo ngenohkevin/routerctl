@@ -39,9 +39,9 @@ export function RebootDialog({ onReboot, disabled }: RebootDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
-        <Button variant="destructive" size="sm" disabled={disabled}>
-          <Power className="h-4 w-4 mr-2" />
-          Reboot
+        <Button variant="destructive" size="sm" className="h-8 px-2 sm:px-3" disabled={disabled}>
+          <Power className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">Reboot</span>
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
