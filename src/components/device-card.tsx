@@ -62,6 +62,7 @@ export function DeviceCard({
     mobileTypes.includes(device.deviceType?.toLowerCase() || '') ||
     hasPrivateMAC;
   const isWan = device.interface === 'WAN';
+  const isOnline = device.status === 'bound' || device.status === 'dynamic';
   const signalQuality = getSignalQuality(device.signalStrength);
 
   const handleBlock = async () => {
@@ -127,7 +128,9 @@ export function DeviceCard({
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex items-center gap-2">
-          {isWifi ? (
+          {!isOnline ? (
+            <WifiOff className="h-4 w-4 text-muted-foreground" />
+          ) : isWifi ? (
             <Wifi className="h-4 w-4 text-blue-500" />
           ) : (
             <Cable className="h-4 w-4 text-green-500" />
@@ -199,23 +202,30 @@ export function DeviceCard({
       </CardHeader>
       <CardContent>
         <div className="space-y-2 text-sm">
-          {/* Connection type (WiFi/Ethernet) */}
-          <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">Connection</span>
-            <div className="flex items-center gap-2">
-              {isWifi ? (
-                <>
-                  <Wifi className="h-4 w-4 text-blue-500" />
-                  <span className="text-blue-500 font-medium">WiFi</span>
-                </>
-              ) : (
-                <>
-                  <Cable className="h-4 w-4 text-green-500" />
-                  <span className="text-green-500 font-medium">Ethernet</span>
-                </>
-              )}
+          {/* Connection type (WiFi/Ethernet) - only show for online devices */}
+          {isOnline ? (
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Connection</span>
+              <div className="flex items-center gap-2">
+                {isWifi ? (
+                  <>
+                    <Wifi className="h-4 w-4 text-blue-500" />
+                    <span className="text-blue-500 font-medium">WiFi</span>
+                  </>
+                ) : (
+                  <>
+                    <Cable className="h-4 w-4 text-green-500" />
+                    <span className="text-green-500 font-medium">Ethernet</span>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Status</span>
+              <span className="text-muted-foreground">Offline</span>
+            </div>
+          )}
           {/* Device type icon */}
           <div className="flex justify-between items-center">
             <span className="text-muted-foreground">Device</span>
