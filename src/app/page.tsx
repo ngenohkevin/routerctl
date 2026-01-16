@@ -19,6 +19,7 @@ export default function Dashboard() {
     systemInfo,
     health,
     isLoading,
+    isConnected,
     error,
     lastUpdated,
     fetchDevices,
@@ -28,24 +29,31 @@ export default function Dashboard() {
     unblockDevice,
     setBandwidthLimit,
     removeBandwidthLimit,
+    subscribeToEvents,
   } = useDevicesStore();
 
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [bandwidthDialogOpen, setBandwidthDialogOpen] = useState(false);
 
   useEffect(() => {
+    // Initial fetch
     fetchHealth();
     fetchDevices();
     fetchSystemInfo();
 
-    // Refresh every 30 seconds
-    const interval = setInterval(() => {
-      fetchDevices();
-      fetchSystemInfo();
+    // Subscribe to real-time updates via SSE
+    const unsubscribe = subscribeToEvents();
+
+    // Refresh health check periodically
+    const healthInterval = setInterval(() => {
+      fetchHealth();
     }, 30000);
 
-    return () => clearInterval(interval);
-  }, [fetchHealth, fetchDevices, fetchSystemInfo]);
+    return () => {
+      unsubscribe();
+      clearInterval(healthInterval);
+    };
+  }, [fetchHealth, fetchDevices, fetchSystemInfo, subscribeToEvents]);
 
   const handleRefresh = () => {
     fetchHealth();
@@ -91,7 +99,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <AgentStatus health={health} />
+            <AgentStatus health={health} isConnected={isConnected} />
             <Button variant="outline" size="sm" onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh

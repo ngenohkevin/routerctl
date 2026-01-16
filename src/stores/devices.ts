@@ -7,6 +7,7 @@ interface DevicesState {
   systemInfo: SystemInfo | null;
   health: HealthStatus | null;
   isLoading: boolean;
+  isConnected: boolean;
   error: string | null;
   lastUpdated: Date | null;
 
@@ -21,6 +22,8 @@ interface DevicesState {
   setDevices: (devices: Device[]) => void;
   setSystemInfo: (systemInfo: SystemInfo) => void;
   setError: (error: string | null) => void;
+  setConnected: (connected: boolean) => void;
+  subscribeToEvents: () => () => void;
 }
 
 export const useDevicesStore = create<DevicesState>((set, get) => ({
@@ -28,6 +31,7 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   systemInfo: null,
   health: null,
   isLoading: false,
+  isConnected: false,
   error: null,
   lastUpdated: null,
 
@@ -153,5 +157,50 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
 
   setError: (error: string | null) => {
     set({ error });
+  },
+
+  setConnected: (connected: boolean) => {
+    set({ isConnected: connected });
+  },
+
+  subscribeToEvents: () => {
+    const { setDevices, setSystemInfo, setError, setConnected } = get();
+
+    // Create EventSource for SSE
+    const eventSource = new EventSource('/api/events');
+
+    eventSource.onopen = () => {
+      setConnected(true);
+      setError(null);
+    };
+
+    eventSource.addEventListener('devices', (event) => {
+      try {
+        const devices = JSON.parse(event.data);
+        setDevices(devices);
+      } catch (e) {
+        console.error('Failed to parse devices event:', e);
+      }
+    });
+
+    eventSource.addEventListener('system', (event) => {
+      try {
+        const system = JSON.parse(event.data);
+        setSystemInfo(system);
+      } catch (e) {
+        console.error('Failed to parse system event:', e);
+      }
+    });
+
+    eventSource.onerror = () => {
+      setConnected(false);
+      // EventSource will auto-reconnect
+    };
+
+    // Return cleanup function
+    return () => {
+      eventSource.close();
+      setConnected(false);
+    };
   },
 }));

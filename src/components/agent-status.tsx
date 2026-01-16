@@ -1,15 +1,16 @@
 'use client';
 
-import { Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle2, Radio } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { HealthStatus } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface AgentStatusProps {
   health: HealthStatus | null;
+  isConnected?: boolean;
 }
 
-export function AgentStatus({ health }: AgentStatusProps) {
+export function AgentStatus({ health, isConnected }: AgentStatusProps) {
   const getStatusConfig = () => {
     if (!health) {
       return {
@@ -63,6 +64,9 @@ export function AgentStatus({ health }: AgentStatusProps) {
     >
       <StatusIcon className={cn('h-3.5 w-3.5', config.color)} />
       <span className={config.color}>{config.label}</span>
+      {isConnected && (
+        <Radio className="h-3 w-3 text-green-500 animate-pulse ml-1" />
+      )}
       {health?.routerConnected && (
         <span className="text-muted-foreground ml-1 text-xs">
           Router OK
