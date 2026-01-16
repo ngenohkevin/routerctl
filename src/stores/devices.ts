@@ -164,42 +164,105 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   },
 
   subscribeToEvents: () => {
-    const { setDevices, setSystemInfo, setError, setConnected } = get();
+    const { fetchDevices, fetchSystemInfo, setConnected, setError } = get();
+    let eventSource: EventSource | null = null;
+    let pollInterval: NodeJS.Timeout | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let usePolling = false;
 
-    // Create EventSource for SSE
-    const eventSource = new EventSource('/api/events');
-
-    eventSource.onopen = () => {
+    const startPolling = () => {
+      if (pollInterval) return;
+      usePolling = true;
       setConnected(true);
-      setError(null);
+      console.log('[SSE] Falling back to polling (5s interval)');
+
+      // Poll every 5 seconds
+      pollInterval = setInterval(() => {
+        fetchDevices();
+        fetchSystemInfo();
+      }, 5000);
     };
 
-    eventSource.addEventListener('devices', (event) => {
-      try {
-        const devices = JSON.parse(event.data);
-        setDevices(devices);
-      } catch (e) {
-        console.error('Failed to parse devices event:', e);
+    const stopPolling = () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
       }
-    });
-
-    eventSource.addEventListener('system', (event) => {
-      try {
-        const system = JSON.parse(event.data);
-        setSystemInfo(system);
-      } catch (e) {
-        console.error('Failed to parse system event:', e);
-      }
-    });
-
-    eventSource.onerror = () => {
-      setConnected(false);
-      // EventSource will auto-reconnect
     };
+
+    const connectSSE = () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+
+      try {
+        eventSource = new EventSource('/api/events');
+
+        eventSource.onopen = () => {
+          setConnected(true);
+          setError(null);
+          stopPolling();
+          usePolling = false;
+          console.log('[SSE] Connected');
+        };
+
+        eventSource.addEventListener('devices', (event) => {
+          try {
+            const devices = JSON.parse(event.data);
+            get().setDevices(devices);
+          } catch (e) {
+            console.error('Failed to parse devices event:', e);
+          }
+        });
+
+        eventSource.addEventListener('system', (event) => {
+          try {
+            const system = JSON.parse(event.data);
+            get().setSystemInfo(system);
+          } catch (e) {
+            console.error('Failed to parse system event:', e);
+          }
+        });
+
+        eventSource.onerror = () => {
+          console.log('[SSE] Connection error, using polling');
+          setConnected(false);
+          eventSource?.close();
+          eventSource = null;
+
+          // Fall back to polling
+          if (!usePolling) {
+            startPolling();
+          }
+
+          // Try to reconnect SSE after 30 seconds
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(() => {
+            if (usePolling) {
+              console.log('[SSE] Attempting to reconnect...');
+              connectSSE();
+            }
+          }, 30000);
+        };
+      } catch (e) {
+        console.error('[SSE] Failed to create EventSource:', e);
+        startPolling();
+      }
+    };
+
+    // Start with SSE, fall back to polling if it fails
+    connectSSE();
 
     // Return cleanup function
     return () => {
-      eventSource.close();
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      stopPolling();
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
       setConnected(false);
     };
   },

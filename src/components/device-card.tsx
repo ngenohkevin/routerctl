@@ -13,6 +13,7 @@ import {
   SignalMedium,
   SignalLow,
   Clock,
+  Globe,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -41,7 +42,9 @@ export function DeviceCard({
 }: DeviceCardProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  const isWifi = device.signalStrength || device.interface?.includes('wlan');
+  // WiFi devices have signal strength data
+  const isWifi = !!device.signalStrength;
+  const isWan = device.interface === 'WAN';
   const signalQuality = getSignalQuality(device.signalStrength);
 
   const handleBlock = async () => {
@@ -87,7 +90,9 @@ export function DeviceCard({
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex items-center gap-2">
-          {isWifi ? (
+          {isWan ? (
+            <Globe className="h-4 w-4 text-purple-500" />
+          ) : isWifi ? (
             <Wifi className="h-4 w-4 text-blue-500" />
           ) : (
             <Cable className="h-4 w-4 text-green-500" />

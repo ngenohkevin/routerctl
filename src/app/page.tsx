@@ -69,12 +69,20 @@ export default function Dashboard() {
     }
   };
 
-  const wifiDevices = devices.filter(
-    (d) => d.signalStrength || d.interface?.includes('wlan')
-  );
+  // WiFi devices have signal strength
+  const wifiDevices = devices.filter((d) => d.signalStrength);
+
+  // Ethernet devices: LAN interface, no signal, exclude WAN and empty interface
   const ethernetDevices = devices.filter(
-    (d) => !d.signalStrength && !d.interface?.includes('wlan')
+    (d) => !d.signalStrength &&
+           d.interface &&
+           d.interface !== 'WAN' &&
+           d.interface.length > 0
   );
+
+  // WAN devices (upstream connection)
+  const wanDevices = devices.filter((d) => d.interface === 'WAN');
+
   const blockedDevices = devices.filter((d) => d.isBlocked);
 
   const stats = {
