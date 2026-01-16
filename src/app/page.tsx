@@ -61,6 +61,7 @@ export default function Dashboard() {
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [priorityDialogOpen, setPriorityDialogOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{ mac: string; currentName: string } | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     // Initial fetch
@@ -82,10 +83,13 @@ export default function Dashboard() {
     };
   }, [fetchHealth, fetchDevices, fetchSystemInfo, subscribeToEvents]);
 
-  const handleRefresh = () => {
-    fetchHealth();
-    fetchDevices();
-    fetchSystemInfo();
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([fetchHealth(), fetchDevices(), fetchSystemInfo()]);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleReboot = async () => {
@@ -243,8 +247,8 @@ export default function Dashboard() {
                 onReboot={handleReboot}
                 disabled={!health?.routerConnected}
               />
-              <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3" onClick={handleRefresh}>
-                <RefreshCw className="h-4 w-4 sm:mr-2" />
+              <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3" onClick={handleRefresh} disabled={isRefreshing}>
+                <RefreshCw className={`h-4 w-4 sm:mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">Refresh</span>
               </Button>
               <Button variant="ghost" size="sm" className="h-8 px-2 sm:px-3" onClick={handleLogout}>
