@@ -149,30 +149,31 @@ export default function Dashboard() {
   const isWifiDevice = (d: Device) =>
     !!d.signalStrength || mobileTypes.includes(d.deviceType?.toLowerCase() || '');
 
-  // Only show active devices (status 'bound' means active DHCP lease)
-  const activeDevices = devices.filter((d) => d.status === 'bound' || d.interface === 'WAN');
+  // Exclude WAN devices from main list (they're upstream, not our network)
+  const lanDevices = devices.filter((d) => d.interface !== 'WAN');
 
-  // WiFi devices have signal strength or are mobile device types
-  const wifiDevices = activeDevices.filter((d) => isWifiDevice(d));
+  // Connected devices: status 'bound' means active DHCP lease
+  const connectedDevices = lanDevices.filter((d) => d.status === 'bound');
 
-  // Ethernet devices: not WiFi, exclude WAN
-  const ethernetDevices = activeDevices.filter(
-    (d) => !isWifiDevice(d) &&
-           d.interface &&
-           d.interface !== 'WAN' &&
-           d.interface.length > 0
+  // Disconnected devices: not 'bound' status (waiting, expired, etc.)
+  const disconnectedDevices = lanDevices.filter((d) => d.status !== 'bound');
+
+  // WiFi devices (from connected only)
+  const wifiDevices = connectedDevices.filter((d) => isWifiDevice(d));
+
+  // Ethernet devices (from connected only)
+  const ethernetDevices = connectedDevices.filter(
+    (d) => !isWifiDevice(d) && d.interface && d.interface.length > 0
   );
-
-  // WAN devices (upstream connection)
-  const wanDevices = activeDevices.filter((d) => d.interface === 'WAN');
 
   const blockedDevices = devices.filter((d) => d.isBlocked);
 
   const stats = {
-    total: activeDevices.length,
+    total: connectedDevices.length,
     wifi: wifiDevices.length,
     ethernet: ethernetDevices.length,
     blocked: blockedDevices.length,
+    disconnected: disconnectedDevices.length,
   };
 
   return (
@@ -260,11 +261,16 @@ export default function Dashboard() {
           <div className="lg:col-span-3">
             <Tabs defaultValue="all" className="space-y-4">
               <TabsList>
-                <TabsTrigger value="all">All ({stats.total})</TabsTrigger>
+                <TabsTrigger value="all">Connected ({stats.total})</TabsTrigger>
                 <TabsTrigger value="wifi">WiFi ({stats.wifi})</TabsTrigger>
                 <TabsTrigger value="ethernet">
                   Ethernet ({stats.ethernet})
                 </TabsTrigger>
+                {stats.disconnected > 0 && (
+                  <TabsTrigger value="disconnected">
+                    Offline ({stats.disconnected})
+                  </TabsTrigger>
+                )}
                 {stats.blocked > 0 && (
                   <TabsTrigger value="blocked">
                     Blocked ({stats.blocked})
@@ -289,7 +295,7 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {activeDevices.map((device) => (
+                    {connectedDevices.map((device) => (
                       <DeviceCard
                         key={device.mac}
                         device={device}
@@ -327,6 +333,24 @@ export default function Dashboard() {
               <TabsContent value="ethernet" className="space-y-4">
                 <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {ethernetDevices.map((device) => (
+                    <DeviceCard
+                      key={device.mac}
+                      device={device}
+                      onBlock={blockDevice}
+                      onUnblock={unblockDevice}
+                      onSetBandwidth={handleSetBandwidth}
+                      onDisconnect={handleDisconnect}
+                      onBoost={handleBoost}
+                      onRename={handleRename}
+                      onWakeOnLan={handleWakeOnLan}
+                    />
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="disconnected" className="space-y-4">
+                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {disconnectedDevices.map((device) => (
                     <DeviceCard
                       key={device.mac}
                       device={device}
