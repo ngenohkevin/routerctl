@@ -144,24 +144,32 @@ export default function Dashboard() {
     }
   };
 
-  // WiFi devices have signal strength
-  const wifiDevices = devices.filter((d) => d.signalStrength);
+  // Helper to check if device is WiFi (has signal or is a mobile device type)
+  const mobileTypes = ['phone', 'tablet', 'mobile'];
+  const isWifiDevice = (d: Device) =>
+    !!d.signalStrength || mobileTypes.includes(d.deviceType?.toLowerCase() || '');
 
-  // Ethernet devices: LAN interface, no signal, exclude WAN and empty interface
-  const ethernetDevices = devices.filter(
-    (d) => !d.signalStrength &&
+  // Only show active devices (status 'bound' means active DHCP lease)
+  const activeDevices = devices.filter((d) => d.status === 'bound' || d.interface === 'WAN');
+
+  // WiFi devices have signal strength or are mobile device types
+  const wifiDevices = activeDevices.filter((d) => isWifiDevice(d));
+
+  // Ethernet devices: not WiFi, exclude WAN
+  const ethernetDevices = activeDevices.filter(
+    (d) => !isWifiDevice(d) &&
            d.interface &&
            d.interface !== 'WAN' &&
            d.interface.length > 0
   );
 
   // WAN devices (upstream connection)
-  const wanDevices = devices.filter((d) => d.interface === 'WAN');
+  const wanDevices = activeDevices.filter((d) => d.interface === 'WAN');
 
   const blockedDevices = devices.filter((d) => d.isBlocked);
 
   const stats = {
-    total: devices.length,
+    total: activeDevices.length,
     wifi: wifiDevices.length,
     ethernet: ethernetDevices.length,
     blocked: blockedDevices.length,
@@ -281,7 +289,7 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {devices.map((device) => (
+                    {activeDevices.map((device) => (
                       <DeviceCard
                         key={device.mac}
                         device={device}

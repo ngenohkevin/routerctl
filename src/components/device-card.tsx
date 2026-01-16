@@ -54,8 +54,9 @@ export function DeviceCard({
 }: DeviceCardProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  // WiFi devices have signal strength data
-  const isWifi = !!device.signalStrength;
+  // WiFi devices have signal strength data, or are mobile devices (phones/tablets are always WiFi)
+  const mobileTypes = ['phone', 'tablet', 'mobile'];
+  const isWifi = !!device.signalStrength || mobileTypes.includes(device.deviceType?.toLowerCase() || '');
   const isWan = device.interface === 'WAN';
   const signalQuality = getSignalQuality(device.signalStrength);
 
