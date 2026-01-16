@@ -50,6 +50,21 @@ function formatBytes(bytes: string | undefined): string {
   return `${num} B`;
 }
 
+// Format rate as speed (bytes/sec to KB/s or MB/s)
+function formatRate(rate: string | undefined): string {
+  if (!rate) return '0 B/s';
+  const num = parseInt(rate, 10);
+  if (isNaN(num) || num === 0) return '0 B/s';
+
+  if (num >= 1024 * 1024) {
+    return `${(num / (1024 * 1024)).toFixed(1)} MB/s`;
+  }
+  if (num >= 1024) {
+    return `${(num / 1024).toFixed(1)} KB/s`;
+  }
+  return `${num} B/s`;
+}
+
 interface DeviceCardProps {
   device: Device;
   onBlock: (mac: string) => Promise<void>;
@@ -297,16 +312,32 @@ export function DeviceCard({
               </div>
             </div>
           )}
-          {/* Bandwidth usage - only show if device has queue stats */}
-          {(device.bytesIn || device.bytesOut) && (
+          {/* Real-time speed - only show if device has queue stats */}
+          {(device.rateIn || device.rateOut) && (
             <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Bandwidth</span>
+              <span className="text-muted-foreground">Speed</span>
               <div className="flex items-center gap-2 text-xs">
                 <span className="flex items-center gap-0.5 text-green-500">
                   <ArrowDown className="h-3 w-3" />
-                  {formatBytes(device.bytesIn)}
+                  {formatRate(device.rateIn)}
                 </span>
                 <span className="flex items-center gap-0.5 text-blue-500">
+                  <ArrowUp className="h-3 w-3" />
+                  {formatRate(device.rateOut)}
+                </span>
+              </div>
+            </div>
+          )}
+          {/* Total bandwidth usage */}
+          {(device.bytesIn || device.bytesOut) && (
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Total</span>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="flex items-center gap-0.5 text-green-500/70">
+                  <ArrowDown className="h-3 w-3" />
+                  {formatBytes(device.bytesIn)}
+                </span>
+                <span className="flex items-center gap-0.5 text-blue-500/70">
                   <ArrowUp className="h-3 w-3" />
                   {formatBytes(device.bytesOut)}
                 </span>

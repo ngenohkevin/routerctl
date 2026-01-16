@@ -24,6 +24,9 @@ export interface Device {
   // Bandwidth usage (from queue stats)
   bytesIn?: string;
   bytesOut?: string;
+  // Real-time bandwidth rate (bytes/sec)
+  rateIn?: string;
+  rateOut?: string;
 }
 
 export interface SystemInfo {
@@ -167,6 +170,8 @@ export interface QueueStats {
   name: string;
   target: string;
   rate: string;
+  rateIn: string;
+  rateOut: string;
   bytesIn: string;
   bytesOut: string;
   packetsIn: string;
