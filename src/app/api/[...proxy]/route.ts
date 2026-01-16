@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+// Disable response size limit for streaming
+export const fetchCache = 'force-no-store';
+
 async function proxyRequest(
   request: NextRequest,
   method: string
-): Promise<NextResponse> {
+): Promise<Response> {
   // Read env vars at request time to ensure they're loaded
   const agentUrl = process.env.AGENT_URL || 'http://localhost:8090';
   const agentApiKey = process.env.AGENT_API_KEY || '';
@@ -15,10 +21,13 @@ async function proxyRequest(
   const targetPath = path === '/health' ? '/health' : `/api${path}`;
   const targetUrl = `${agentUrl}${targetPath}${url.search}`;
 
-  console.log(`[Proxy] ${method} ${targetUrl} (API key: ${agentApiKey ? 'set' : 'not set'})`);
+  // Check if this is an SSE request
+  const isSSE = path === '/events';
+
+  console.log(`[Proxy] ${method} ${targetUrl} (SSE: ${isSSE}, API key: ${agentApiKey ? 'set' : 'not set'})`);
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    'Accept': isSSE ? 'text/event-stream' : 'application/json',
   };
 
   if (agentApiKey) {
@@ -31,11 +40,24 @@ async function proxyRequest(
     headers['Content-Type'] = contentType;
   }
 
+  if (isSSE) {
+    headers['Cache-Control'] = 'no-cache';
+    headers['Connection'] = 'keep-alive';
+  }
+
   try {
-    const fetchOptions: RequestInit = {
+    // Build fetch options - SSE needs special handling
+    const fetchOptions: RequestInit & { keepalive?: boolean } = {
       method,
       headers,
+      // @ts-expect-error - duplex is needed for streaming
+      duplex: 'half',
     };
+
+    // For SSE, enable keepalive for long-lived connections
+    if (isSSE) {
+      fetchOptions.keepalive = true;
+    }
 
     // Include body for methods that support it
     if (['POST', 'PUT', 'PATCH'].includes(method)) {
@@ -47,17 +69,56 @@ async function proxyRequest(
 
     const response = await fetch(targetUrl, fetchOptions);
 
-    // Check if this is an SSE request
-    const isSSE = response.headers.get('content-type')?.includes('text/event-stream');
+    // Check if this is an SSE response
+    const responseIsSSE = response.headers.get('content-type')?.includes('text/event-stream');
 
-    if (isSSE) {
-      // Stream SSE responses
-      return new NextResponse(response.body, {
+    if (responseIsSSE && response.body) {
+      console.log('[SSE] Streaming response from agent');
+
+      // Create a ReadableStream that directly forwards chunks
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+
+              if (done) {
+                console.log('[SSE] Stream ended');
+                controller.close();
+                break;
+              }
+
+              // Forward the chunk directly
+              controller.enqueue(value);
+
+              // Log events for debugging
+              const chunk = decoder.decode(value, { stream: true });
+              if (chunk.includes('event:')) {
+                console.log('[SSE] Event forwarded');
+              }
+            }
+          } catch (e) {
+            console.error('[SSE] Stream error:', e);
+            controller.error(e);
+          }
+        },
+        cancel() {
+          console.log('[SSE] Stream cancelled by client');
+          reader.cancel();
+        },
+      });
+
+      return new Response(stream, {
         status: response.status,
         headers: {
           'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'no-cache, no-transform',
           'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no',
+          'Transfer-Encoding': 'chunked',
         },
       });
     }
