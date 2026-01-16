@@ -90,7 +90,12 @@ export function DeviceCard({
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex items-center gap-2">
-          {isWan ? (
+          {/* Device type icon from vendor lookup */}
+          {device.deviceIcon ? (
+            <span className="text-base" role="img" aria-label={device.deviceType || 'device'}>
+              {device.deviceIcon}
+            </span>
+          ) : isWan ? (
             <Globe className="h-4 w-4 text-purple-500" />
           ) : isWifi ? (
             <Wifi className="h-4 w-4 text-blue-500" />
@@ -98,7 +103,7 @@ export function DeviceCard({
             <Cable className="h-4 w-4 text-green-500" />
           )}
           <CardTitle className="text-sm font-medium">
-            {device.hostname || device.ip}
+            {device.hostname || device.vendor || device.ip}
           </CardTitle>
         </div>
         <DropdownMenu>
@@ -140,6 +145,12 @@ export function DeviceCard({
             <span className="text-muted-foreground">MAC</span>
             <span className="font-mono text-xs">{device.mac}</span>
           </div>
+          {device.vendor && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Vendor</span>
+              <span className="text-xs">{device.vendor}</span>
+            </div>
+          )}
           {device.interface && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Interface</span>

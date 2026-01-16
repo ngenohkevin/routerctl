@@ -17,6 +17,10 @@ export interface Device {
   signalStrength?: string;
   txRate?: string;
   rxRate?: string;
+  // Vendor identification
+  vendor?: string;
+  deviceType?: string;
+  deviceIcon?: string;
 }
 
 export interface SystemInfo {
