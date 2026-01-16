@@ -54,9 +54,13 @@ export function DeviceCard({
 }: DeviceCardProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  // WiFi devices have signal strength data, or are mobile devices (phones/tablets are always WiFi)
+  // WiFi devices have signal strength data, or are mobile devices, or have private MACs (typically WiFi)
   const mobileTypes = ['phone', 'tablet', 'mobile'];
-  const isWifi = !!device.signalStrength || mobileTypes.includes(device.deviceType?.toLowerCase() || '');
+  const hasPrivateMAC = device.vendor === 'Private Address';
+  // Private MACs are used by phones AND modern laptops on WiFi, so assume WiFi for them
+  const isWifi = !!device.signalStrength ||
+    mobileTypes.includes(device.deviceType?.toLowerCase() || '') ||
+    hasPrivateMAC;
   const isWan = device.interface === 'WAN';
   const signalQuality = getSignalQuality(device.signalStrength);
 

@@ -144,10 +144,12 @@ export default function Dashboard() {
     }
   };
 
-  // Helper to check if device is WiFi (has signal or is a mobile device type)
+  // Helper to check if device is WiFi (has signal, is mobile type, or has private MAC)
   const mobileTypes = ['phone', 'tablet', 'mobile'];
   const isWifiDevice = (d: Device) =>
-    !!d.signalStrength || mobileTypes.includes(d.deviceType?.toLowerCase() || '');
+    !!d.signalStrength ||
+    mobileTypes.includes(d.deviceType?.toLowerCase() || '') ||
+    d.vendor === 'Private Address';
 
   // Exclude WAN devices from main list (they're upstream, not our network)
   const lanDevices = devices.filter((d) => d.interface !== 'WAN');
