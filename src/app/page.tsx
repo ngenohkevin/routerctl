@@ -152,11 +152,11 @@ export default function Dashboard() {
   // Exclude WAN devices from main list (they're upstream, not our network)
   const lanDevices = devices.filter((d) => d.interface !== 'WAN');
 
-  // Connected devices: status 'bound' means active DHCP lease
-  const connectedDevices = lanDevices.filter((d) => d.status === 'bound');
+  // Connected devices: 'bound' (connected with DHCP) or 'dynamic' (connected, ARP-only)
+  const connectedDevices = lanDevices.filter((d) => d.status === 'bound' || d.status === 'dynamic');
 
-  // Disconnected devices: not 'bound' status (waiting, expired, etc.)
-  const disconnectedDevices = lanDevices.filter((d) => d.status !== 'bound');
+  // Disconnected devices: 'offline' or other non-connected status
+  const disconnectedDevices = lanDevices.filter((d) => d.status !== 'bound' && d.status !== 'dynamic');
 
   // WiFi devices (from connected only)
   const wifiDevices = connectedDevices.filter((d) => isWifiDevice(d));

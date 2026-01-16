@@ -129,7 +129,7 @@ export function DeviceCard({
             <Cable className="h-4 w-4 text-green-500" />
           )}
           <CardTitle className="text-sm font-medium">
-            {device.hostname || (isWan ? 'Gateway' : device.vendor) || device.ip}
+            {device.comment || device.hostname || (isWan ? 'Gateway' : device.vendor) || device.ip}
           </CardTitle>
         </div>
         <DropdownMenu>
@@ -141,7 +141,7 @@ export function DeviceCard({
           <DropdownMenuContent align="end">
             {onRename && (
               <DropdownMenuItem
-                onClick={() => onRename(device.mac, device.hostname || device.vendor || '')}
+                onClick={() => onRename(device.mac, device.comment || device.hostname || device.vendor || '')}
               >
                 <Edit3 className="mr-2 h-4 w-4" />
                 Rename Device
@@ -195,9 +195,26 @@ export function DeviceCard({
       </CardHeader>
       <CardContent>
         <div className="space-y-2 text-sm">
+          {/* Connection type (WiFi/Ethernet) */}
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground">Connection</span>
+            <div className="flex items-center gap-2">
+              {isWifi ? (
+                <>
+                  <Wifi className="h-4 w-4 text-blue-500" />
+                  <span className="text-blue-500 font-medium">WiFi</span>
+                </>
+              ) : (
+                <>
+                  <Cable className="h-4 w-4 text-green-500" />
+                  <span className="text-green-500 font-medium">Ethernet</span>
+                </>
+              )}
+            </div>
+          </div>
           {/* Device type icon */}
           <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">Type</span>
+            <span className="text-muted-foreground">Device</span>
             <div className="flex items-center gap-2">
               {isWan ? (
                 <span className="text-xl" role="img" aria-label="wan">🌐</span>
@@ -205,12 +222,8 @@ export function DeviceCard({
                 <span className="text-xl" role="img" aria-label={device.deviceType || 'device'}>
                   {device.deviceIcon}
                 </span>
-              ) : isWifi ? (
-                <Wifi className="h-5 w-5 text-blue-500" />
-              ) : (
-                <Cable className="h-5 w-5 text-green-500" />
-              )}
-              <span className="text-xs capitalize">{device.deviceType || (isWifi ? 'WiFi' : 'Ethernet')}</span>
+              ) : null}
+              <span className="text-xs capitalize">{device.deviceType || 'Unknown'}</span>
             </div>
           </div>
           <div className="flex justify-between">
@@ -262,7 +275,7 @@ export function DeviceCard({
                 {formatBandwidth(device.downloadLimit || '0')} limit
               </Badge>
             )}
-            {device.status === 'bound' && (
+            {(device.status === 'bound' || device.status === 'dynamic') && (
               <Badge variant="outline" className="text-xs text-green-500 border-green-500">
                 Active
               </Badge>
