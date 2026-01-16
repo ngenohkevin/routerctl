@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Settings, ArrowLeft, Power, Server } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,15 +10,23 @@ import { RebootDialog } from '@/components/reboot-dialog';
 import { SchedulerDialog } from '@/components/scheduler-dialog';
 import { ScheduledTasks } from '@/components/scheduled-tasks';
 import { AgentStatus } from '@/components/agent-status';
-import { api } from '@/lib/api';
+import { api, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
 import type { ScheduledTask, HealthStatus, SystemInfo } from '@/types';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Check authentication
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.push('/login');
+    }
+  }, [router]);
 
   const fetchData = async () => {
     setIsLoading(true);

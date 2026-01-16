@@ -14,6 +14,33 @@ import type {
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
+const AUTH_BASE = process.env.NEXT_PUBLIC_AGENT_URL?.replace('/api', '/auth') || '/api/auth';
+const TOKEN_KEY = 'routerctl_token';
+
+// Helper to get token from localStorage (client-side only)
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+// Helper to set token in localStorage
+export function setToken(token: string): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(TOKEN_KEY, token);
+  }
+}
+
+// Helper to remove token from localStorage
+export function removeToken(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+// Check if user is authenticated
+export function isAuthenticated(): boolean {
+  return !!getToken();
+}
 
 interface ApiOptions {
   headers?: Record<string, string>;
@@ -23,21 +50,29 @@ async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const apiKey = process.env.NEXT_PUBLIC_AGENT_API_KEY;
+  const token = getToken();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
 
-  if (apiKey) {
-    headers['Authorization'] = `Bearer ${apiKey}`;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
   });
+
+  if (response.status === 401) {
+    removeToken();
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+    throw new Error('Session expired. Please login again.');
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -47,7 +82,38 @@ async function fetchApi<T>(
   return response.json();
 }
 
+export interface LoginResponse {
+  token: string;
+  expiresAt: number;
+  username: string;
+}
+
 export const api = {
+  // Auth
+  async login(username: string, password: string): Promise<LoginResponse> {
+    const response = await fetch(`${AUTH_BASE}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Login failed' }));
+      throw new Error(error.error || 'Login failed');
+    }
+
+    const data = await response.json();
+    setToken(data.token);
+    return data;
+  },
+
+  logout(): void {
+    removeToken();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+  },
+
   // Health
   async getHealth(): Promise<HealthStatus> {
     return fetchApi<HealthStatus>('/health');

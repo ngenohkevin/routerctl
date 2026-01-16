@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Router, RefreshCw, Wifi, Cable, Ban, Settings } from 'lucide-react';
+import { Router, RefreshCw, Wifi, Cable, Ban, Settings, LogOut } from 'lucide-react';
+import { api, isAuthenticated } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,11 +17,22 @@ import { RenameDialog } from '@/components/rename-dialog';
 import { PriorityDialog } from '@/components/priority-dialog';
 import { RebootDialog } from '@/components/reboot-dialog';
 import { useDevicesStore } from '@/stores/devices';
-import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import type { Device } from '@/types';
 
 export default function Dashboard() {
+  const router = useRouter();
+
+  // Check authentication
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.push('/login');
+    }
+  }, [router]);
+
+  const handleLogout = () => {
+    api.logout();
+  };
   const {
     devices,
     systemInfo,
@@ -233,6 +246,10 @@ export default function Dashboard() {
               <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3" onClick={handleRefresh}>
                 <RefreshCw className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Refresh</span>
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 px-2 sm:px-3" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Logout</span>
               </Button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Activity, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,15 +9,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BandwidthChart } from '@/components/bandwidth-chart';
 import { TrafficTable } from '@/components/traffic-table';
 import { AgentStatus } from '@/components/agent-status';
-import { api } from '@/lib/api';
+import { api, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
 import type { QueueStats, TrafficStats, HealthStatus } from '@/types';
 
 export default function TrafficPage() {
+  const router = useRouter();
   const [queueStats, setQueueStats] = useState<QueueStats[]>([]);
   const [trafficStats, setTrafficStats] = useState<TrafficStats[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Check authentication
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.push('/login');
+    }
+  }, [router]);
 
   const fetchData = async () => {
     setIsLoading(true);
