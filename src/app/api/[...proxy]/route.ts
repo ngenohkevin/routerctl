@@ -77,37 +77,43 @@ async function proxyRequest(
 
       // Create a ReadableStream that directly forwards chunks
       const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+      let isClosed = false;
 
       const stream = new ReadableStream({
         async start(controller) {
           try {
-            while (true) {
+            while (!isClosed) {
               const { done, value } = await reader.read();
 
-              if (done) {
-                console.log('[SSE] Stream ended');
-                controller.close();
+              if (done || isClosed) {
+                if (!isClosed) {
+                  console.log('[SSE] Stream ended');
+                  isClosed = true;
+                  controller.close();
+                }
                 break;
               }
 
               // Forward the chunk directly
               controller.enqueue(value);
-
-              // Log events for debugging
-              const chunk = decoder.decode(value, { stream: true });
-              if (chunk.includes('event:')) {
-                console.log('[SSE] Event forwarded');
-              }
             }
           } catch (e) {
-            console.error('[SSE] Stream error:', e);
-            controller.error(e);
+            // Only log if not a normal cancellation
+            if (!isClosed) {
+              console.error('[SSE] Stream error:', e);
+              isClosed = true;
+              try {
+                controller.error(e);
+              } catch {
+                // Controller already closed, ignore
+              }
+            }
           }
         },
         cancel() {
           console.log('[SSE] Stream cancelled by client');
-          reader.cancel();
+          isClosed = true;
+          reader.cancel().catch(() => {});
         },
       });
 
