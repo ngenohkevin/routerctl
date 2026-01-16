@@ -49,6 +49,27 @@ export function formatUptime(uptime: string): string {
   return parts.join(' ') || uptime;
 }
 
+export function formatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return 'Just now';
+
+  const weeks = Math.floor(seconds / (7 * 24 * 60 * 60));
+  const days = Math.floor((seconds % (7 * 24 * 60 * 60)) / (24 * 60 * 60));
+  const hours = Math.floor((seconds % (24 * 60 * 60)) / (60 * 60));
+  const minutes = Math.floor((seconds % (60 * 60)) / 60);
+
+  const parts: string[] = [];
+  if (weeks > 0) parts.push(`${weeks}w`);
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 && weeks === 0) parts.push(`${minutes}m`);
+
+  if (parts.length === 0) {
+    return 'Just now';
+  }
+
+  return parts.slice(0, 2).join(' ');
+}
+
 export function formatMAC(mac: string): string {
   return mac.toUpperCase().replace(/-/g, ':');
 }

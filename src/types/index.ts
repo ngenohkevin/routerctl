@@ -10,6 +10,10 @@ export interface Device {
   uploadLimit?: string;
   downloadLimit?: string;
   comment?: string;
+  // Connection time
+  uptime?: string;
+  uptimeSeconds: number;
+  // WiFi specific
   signalStrength?: string;
   txRate?: string;
   rxRate?: string;

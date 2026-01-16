@@ -12,6 +12,7 @@ import {
   SignalHigh,
   SignalMedium,
   SignalLow,
+  Clock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { Device } from '@/types';
-import { cn, getSignalQuality, formatBandwidth } from '@/lib/utils';
+import { cn, getSignalQuality, formatBandwidth, formatDuration } from '@/lib/utils';
 
 interface DeviceCardProps {
   device: Device;
@@ -138,6 +139,15 @@ export function DeviceCard({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Interface</span>
               <span>{device.interface}</span>
+            </div>
+          )}
+          {device.uptimeSeconds > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Connected</span>
+              <div className="flex items-center gap-1">
+                <Clock className="h-3 w-3 text-muted-foreground" />
+                <span>{formatDuration(device.uptimeSeconds)}</span>
+              </div>
             </div>
           )}
           {isWifi && device.signalStrength && (
