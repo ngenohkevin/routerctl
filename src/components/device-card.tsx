@@ -122,9 +122,16 @@ export function DeviceCard({
       )}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">
-          {device.hostname || (isWan ? 'Gateway' : device.vendor) || device.ip}
-        </CardTitle>
+        <div className="flex items-center gap-2">
+          {isWifi ? (
+            <Wifi className="h-4 w-4 text-blue-500" />
+          ) : (
+            <Cable className="h-4 w-4 text-green-500" />
+          )}
+          <CardTitle className="text-sm font-medium">
+            {device.hostname || (isWan ? 'Gateway' : device.vendor) || device.ip}
+          </CardTitle>
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
