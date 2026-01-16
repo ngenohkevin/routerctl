@@ -49,28 +49,28 @@ export const api = {
 
   // Devices
   async getDevices(): Promise<DevicesResponse> {
-    return fetchApi<DevicesResponse>('/api/devices');
+    return fetchApi<DevicesResponse>('/devices');
   },
 
   async getDevice(mac: string): Promise<{ device: Device }> {
-    return fetchApi<{ device: Device }>(`/api/devices/${encodeURIComponent(mac)}`);
+    return fetchApi<{ device: Device }>(`/devices/${encodeURIComponent(mac)}`);
   },
 
   async blockDevice(mac: string): Promise<{ message: string }> {
-    return fetchApi<{ message: string }>(`/api/devices/${encodeURIComponent(mac)}/block`, {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/block`, {
       method: 'POST',
     });
   },
 
   async unblockDevice(mac: string): Promise<{ message: string }> {
-    return fetchApi<{ message: string }>(`/api/devices/${encodeURIComponent(mac)}/unblock`, {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/unblock`, {
       method: 'POST',
     });
   },
 
   // Bandwidth
   async getBandwidth(): Promise<BandwidthResponse> {
-    return fetchApi<BandwidthResponse>('/api/bandwidth');
+    return fetchApi<BandwidthResponse>('/bandwidth');
   },
 
   async setBandwidthLimit(
@@ -78,25 +78,25 @@ export const api = {
     upload: string,
     download: string
   ): Promise<{ message: string }> {
-    return fetchApi<{ message: string }>(`/api/bandwidth/${encodeURIComponent(mac)}/limit`, {
+    return fetchApi<{ message: string }>(`/bandwidth/${encodeURIComponent(mac)}/limit`, {
       method: 'POST',
       body: JSON.stringify({ upload, download }),
     });
   },
 
   async removeBandwidthLimit(mac: string): Promise<{ message: string }> {
-    return fetchApi<{ message: string }>(`/api/bandwidth/${encodeURIComponent(mac)}/limit`, {
+    return fetchApi<{ message: string }>(`/bandwidth/${encodeURIComponent(mac)}/limit`, {
       method: 'DELETE',
     });
   },
 
   // System
   async getSystem(): Promise<SystemResponse> {
-    return fetchApi<SystemResponse>('/api/system');
+    return fetchApi<SystemResponse>('/system');
   },
 
   async getInterfaces(): Promise<InterfacesResponse> {
-    return fetchApi<InterfacesResponse>('/api/interfaces');
+    return fetchApi<InterfacesResponse>('/interfaces');
   },
 
   // SSE Events
@@ -106,7 +106,7 @@ export const api = {
     onError: (error: Error) => void
   ): () => void {
     const apiKey = process.env.NEXT_PUBLIC_AGENT_API_KEY;
-    const url = new URL(`${API_BASE}/api/events`, window.location.origin);
+    const url = new URL(`${API_BASE}/events`, window.location.origin);
 
     const eventSource = new EventSource(url.toString());
 

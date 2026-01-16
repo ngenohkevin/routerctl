@@ -1,22 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const AGENT_URL = process.env.AGENT_URL || 'http://100.118.200.1:8090';
-const AGENT_API_KEY = process.env.AGENT_API_KEY || '';
-
 async function proxyRequest(
   request: NextRequest,
   method: string
 ): Promise<NextResponse> {
+  // Read env vars at request time to ensure they're loaded
+  const agentUrl = process.env.AGENT_URL || 'http://localhost:8090';
+  const agentApiKey = process.env.AGENT_API_KEY || '';
+
   const url = new URL(request.url);
+  // Remove the /api prefix from Next.js route
   const path = url.pathname.replace('/api', '');
-  const targetUrl = `${AGENT_URL}${path}${url.search}`;
+  // Health endpoint is at root, all others under /api on the agent
+  const targetPath = path === '/health' ? '/health' : `/api${path}`;
+  const targetUrl = `${agentUrl}${targetPath}${url.search}`;
+
+  console.log(`[Proxy] ${method} ${targetUrl} (API key: ${agentApiKey ? 'set' : 'not set'})`);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
 
-  if (AGENT_API_KEY) {
-    headers['Authorization'] = `Bearer ${AGENT_API_KEY}`;
+  if (agentApiKey) {
+    headers['Authorization'] = `Bearer ${agentApiKey}`;
   }
 
   // Forward relevant headers from original request
