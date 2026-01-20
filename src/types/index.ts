@@ -178,3 +178,35 @@ export interface QueueStats {
   packetsOut: string;
   dropped: string;
 }
+
+// Router Logs
+export interface LogEntry {
+  id: string;
+  time: string;
+  topics: string;
+  message: string;
+}
+
+export interface LogsResponse {
+  logs: LogEntry[];
+  count: number;
+}
+
+// DHCP Leases
+export interface DHCPLease {
+  id: string;
+  address: string;
+  mac: string;
+  hostname: string;
+  comment: string;
+  server: string;
+  dynamic: boolean;
+  disabled: boolean;
+  status: string;
+  lastSeen?: string;
+}
+
+export interface DHCPLeasesResponse {
+  leases: DHCPLease[];
+  count: number;
+}

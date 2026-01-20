@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Router, RefreshCw, Wifi, Cable, Ban, Settings, LogOut } from 'lucide-react';
+import { Router, RefreshCw, Wifi, Cable, Ban, Settings, LogOut, ScrollText, Network } from 'lucide-react';
 import { api, isAuthenticated } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -227,14 +227,18 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Traffic page commented out - only shows stats for devices with bandwidth limits
-              <Link href="/traffic">
+              <Link href="/logs">
                 <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3">
-                  <Activity className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Traffic</span>
+                  <ScrollText className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Logs</span>
                 </Button>
               </Link>
-              */}
+              <Link href="/dhcp">
+                <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3">
+                  <Network className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">DHCP</span>
+                </Button>
+              </Link>
               <Link href="/settings">
                 <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3">
                   <Settings className="h-4 w-4 sm:mr-2" />

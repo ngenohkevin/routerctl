@@ -11,6 +11,10 @@ import type {
   SpeedTestResult,
   TrafficStats,
   QueueStats,
+  LogEntry,
+  LogsResponse,
+  DHCPLease,
+  DHCPLeasesResponse,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -304,5 +308,72 @@ export const api = {
     return () => {
       eventSource.close();
     };
+  },
+
+  // Router Logs
+  async getLogs(limit: number = 100, topics?: string): Promise<LogsResponse> {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (topics) {
+      params.append('topics', topics);
+    }
+    return fetchApi<LogsResponse>(`/logs?${params.toString()}`);
+  },
+
+  async getLogTopics(): Promise<{ topics: string[] }> {
+    return fetchApi<{ topics: string[] }>('/logs/topics');
+  },
+
+  // DHCP Lease Management
+  async getDHCPLeases(staticOnly: boolean = false): Promise<DHCPLeasesResponse> {
+    const params = staticOnly ? '?static=true' : '';
+    return fetchApi<DHCPLeasesResponse>(`/dhcp/leases${params}`);
+  },
+
+  async getDHCPLease(mac: string): Promise<{ lease: DHCPLease }> {
+    return fetchApi<{ lease: DHCPLease }>(`/dhcp/leases/${encodeURIComponent(mac)}`);
+  },
+
+  async makeLeaseStatic(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/dhcp/leases/${encodeURIComponent(mac)}/static`, {
+      method: 'POST',
+    });
+  },
+
+  async createStaticLease(data: {
+    mac: string;
+    address: string;
+    hostname?: string;
+    comment?: string;
+    server?: string;
+  }): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/dhcp/leases', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateLease(mac: string, data: { hostname?: string; comment?: string }): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/dhcp/leases/${encodeURIComponent(mac)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteLease(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/dhcp/leases/${encodeURIComponent(mac)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async enableLease(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/dhcp/leases/${encodeURIComponent(mac)}/enable`, {
+      method: 'POST',
+    });
+  },
+
+  async disableLease(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/dhcp/leases/${encodeURIComponent(mac)}/disable`, {
+      method: 'POST',
+    });
   },
 };
