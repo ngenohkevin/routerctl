@@ -42,22 +42,18 @@ async function proxyRequest(
 
   if (isSSE) {
     headers['Cache-Control'] = 'no-cache';
-    headers['Connection'] = 'keep-alive';
+    // Don't set Connection header - HTTP/2 doesn't use it
   }
 
   try {
     // Build fetch options - SSE needs special handling
-    const fetchOptions: RequestInit & { keepalive?: boolean } = {
+    const fetchOptions: RequestInit = {
       method,
       headers,
+      cache: 'no-store',
       // @ts-expect-error - duplex is needed for streaming
       duplex: 'half',
     };
-
-    // For SSE, enable keepalive for long-lived connections
-    if (isSSE) {
-      fetchOptions.keepalive = true;
-    }
 
     // Include body for methods that support it
     if (['POST', 'PUT', 'PATCH'].includes(method)) {
@@ -75,56 +71,16 @@ async function proxyRequest(
     if (responseIsSSE && response.body) {
       console.log('[SSE] Streaming response from agent');
 
-      // Create a ReadableStream that directly forwards chunks
-      const reader = response.body.getReader();
-      let isClosed = false;
-
-      const stream = new ReadableStream({
-        async start(controller) {
-          try {
-            while (!isClosed) {
-              const { done, value } = await reader.read();
-
-              if (done || isClosed) {
-                if (!isClosed) {
-                  console.log('[SSE] Stream ended');
-                  isClosed = true;
-                  controller.close();
-                }
-                break;
-              }
-
-              // Forward the chunk directly
-              controller.enqueue(value);
-            }
-          } catch (e) {
-            // Only log if not a normal cancellation
-            if (!isClosed) {
-              console.error('[SSE] Stream error:', e);
-              isClosed = true;
-              try {
-                controller.error(e);
-              } catch {
-                // Controller already closed, ignore
-              }
-            }
-          }
-        },
-        cancel() {
-          console.log('[SSE] Stream cancelled by client');
-          isClosed = true;
-          reader.cancel().catch(() => {});
-        },
-      });
-
-      return new Response(stream, {
+      // For HTTP/2 compatibility, pass through the response body directly
+      // This avoids issues with ReadableStream wrapping that can cause protocol errors
+      return new Response(response.body, {
         status: response.status,
         headers: {
           'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache, no-transform',
-          'Connection': 'keep-alive',
+          'Cache-Control': 'no-cache, no-store, no-transform, must-revalidate',
           'X-Accel-Buffering': 'no',
-          'Transfer-Encoding': 'chunked',
+          'X-Content-Type-Options': 'nosniff',
+          // Don't set Connection or Transfer-Encoding - HTTP/2 handles these differently
         },
       });
     }
