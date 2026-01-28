@@ -27,6 +27,9 @@ export interface Device {
   // Real-time bandwidth rate (bytes/sec)
   rateIn?: string;
   rateOut?: string;
+  // Default bandwidth tracking
+  isDefaultLimit: boolean;
+  isExempt: boolean;
 }
 
 export interface SystemInfo {
@@ -111,6 +114,11 @@ export interface BandwidthResponse {
   stats: BandwidthStats[];
 }
 
+export interface DefaultBandwidthConfig {
+  enabled: boolean;
+  limit: string;
+}
+
 export interface InterfacesResponse {
   interfaces: InterfaceInfo[];
 }
@@ -124,6 +132,7 @@ export interface ScheduledTask {
   onEvent: string;
   nextRun: string;
   runCount: string;
+  rebootCount: number;
   comment?: string;
   disabled: boolean;
 }

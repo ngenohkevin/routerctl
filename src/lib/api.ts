@@ -5,6 +5,7 @@ import type {
   InterfacesResponse,
   HealthStatus,
   Device,
+  DefaultBandwidthConfig,
   ScheduledTask,
   DnsCacheEntry,
   PingResult,
@@ -162,6 +163,37 @@ export const api = {
 
   async removeBandwidthLimit(mac: string): Promise<{ message: string }> {
     return fetchApi<{ message: string }>(`/bandwidth/${encodeURIComponent(mac)}/limit`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Default Bandwidth
+  async getDefaultBandwidth(): Promise<DefaultBandwidthConfig> {
+    return fetchApi<DefaultBandwidthConfig>('/bandwidth/default');
+  },
+
+  async updateDefaultBandwidth(limit: string, enabled: boolean): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/bandwidth/default', {
+      method: 'PUT',
+      body: JSON.stringify({ limit, enabled }),
+    });
+  },
+
+  async removeDefaultBandwidth(): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/bandwidth/default', {
+      method: 'DELETE',
+    });
+  },
+
+  // Device Exemption
+  async exemptDevice(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/bandwidth/${encodeURIComponent(mac)}/exempt`, {
+      method: 'POST',
+    });
+  },
+
+  async removeExemption(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/bandwidth/${encodeURIComponent(mac)}/exempt`, {
       method: 'DELETE',
     });
   },

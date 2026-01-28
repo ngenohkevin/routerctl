@@ -19,6 +19,8 @@ interface DevicesState {
   unblockDevice: (mac: string) => Promise<void>;
   setBandwidthLimit: (mac: string, upload: string, download: string) => Promise<void>;
   removeBandwidthLimit: (mac: string) => Promise<void>;
+  exemptDevice: (mac: string) => Promise<void>;
+  removeExemption: (mac: string) => Promise<void>;
   disconnectDevice: (mac: string) => Promise<void>;
   setDeviceName: (mac: string, name: string) => Promise<void>;
   setDevicePriority: (mac: string, priority: number) => Promise<void>;
@@ -140,13 +142,49 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
       set((state) => ({
         devices: state.devices.map((d) =>
           d.mac === mac
-            ? { ...d, hasBWLimit: false, uploadLimit: undefined, downloadLimit: undefined }
+            ? { ...d, hasBWLimit: false, uploadLimit: undefined, downloadLimit: undefined, isDefaultLimit: false }
             : d
         ),
       }));
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to remove bandwidth limit',
+      });
+      throw error;
+    }
+  },
+
+  exemptDevice: async (mac: string) => {
+    try {
+      await api.exemptDevice(mac);
+      set((state) => ({
+        devices: state.devices.map((d) =>
+          d.mac === mac
+            ? { ...d, isExempt: true, isDefaultLimit: false, hasBWLimit: false }
+            : d
+        ),
+      }));
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to exempt device',
+      });
+      throw error;
+    }
+  },
+
+  removeExemption: async (mac: string) => {
+    try {
+      await api.removeExemption(mac);
+      set((state) => ({
+        devices: state.devices.map((d) =>
+          d.mac === mac
+            ? { ...d, isExempt: false, isDefaultLimit: true, hasBWLimit: true }
+            : d
+        ),
+      }));
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to remove exemption',
       });
       throw error;
     }

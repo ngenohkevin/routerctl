@@ -53,6 +53,8 @@ export default function Dashboard() {
     setDevicePriority,
     removeDevicePriority,
     wakeOnLan,
+    exemptDevice,
+    removeExemption,
     subscribeToEvents,
   } = useDevicesStore();
 
@@ -138,6 +140,24 @@ export default function Dashboard() {
       toast.success('Wake on LAN packet sent');
     } catch {
       toast.error('Failed to send Wake on LAN');
+    }
+  };
+
+  const handleExempt = async (mac: string) => {
+    try {
+      await exemptDevice(mac);
+      toast.success('Device exempted from default limit');
+    } catch {
+      toast.error('Failed to exempt device');
+    }
+  };
+
+  const handleRemoveExemption = async (mac: string) => {
+    try {
+      await removeExemption(mac);
+      toast.success('Exemption removed');
+    } catch {
+      toast.error('Failed to remove exemption');
     }
   };
 
@@ -370,6 +390,8 @@ export default function Dashboard() {
                         onBoost={handleBoost}
                         onRename={handleRename}
                         onWakeOnLan={handleWakeOnLan}
+                        onExempt={handleExempt}
+                        onRemoveExemption={handleRemoveExemption}
                       />
                     ))}
                   </div>

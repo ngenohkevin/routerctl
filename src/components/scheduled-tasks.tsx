@@ -136,7 +136,7 @@ function ScheduledTaskRow({
         {task.nextRun || '-'}
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">
-        {task.runCount || '0'}
+        {task.rebootCount > 0 ? task.rebootCount : task.runCount || '0'}
       </TableCell>
       <TableCell>
         <Button

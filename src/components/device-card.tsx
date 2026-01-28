@@ -20,6 +20,8 @@ import {
   WifiOff,
   ArrowDown,
   ArrowUp,
+  ShieldOff,
+  Shield,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +76,8 @@ interface DeviceCardProps {
   onBoost?: (mac: string) => void;
   onRename?: (mac: string, currentName: string) => void;
   onWakeOnLan?: (mac: string) => Promise<void>;
+  onExempt?: (mac: string) => Promise<void>;
+  onRemoveExemption?: (mac: string) => Promise<void>;
 }
 
 export function DeviceCard({
@@ -85,6 +89,8 @@ export function DeviceCard({
   onBoost,
   onRename,
   onWakeOnLan,
+  onExempt,
+  onRemoveExemption,
 }: DeviceCardProps) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -192,6 +198,17 @@ export function DeviceCard({
               <Gauge className="mr-2 h-4 w-4" />
               Set Bandwidth Limit
             </DropdownMenuItem>
+            {device.isExempt && onRemoveExemption ? (
+              <DropdownMenuItem onClick={() => onRemoveExemption(device.mac)}>
+                <ShieldOff className="mr-2 h-4 w-4" />
+                Remove Exemption
+              </DropdownMenuItem>
+            ) : !device.isExempt && onExempt ? (
+              <DropdownMenuItem onClick={() => onExempt(device.mac)}>
+                <Shield className="mr-2 h-4 w-4 text-emerald-500" />
+                Exempt from Default Limit
+              </DropdownMenuItem>
+            ) : null}
             {onBoost && (
               <DropdownMenuItem onClick={() => onBoost(device.mac)}>
                 <Zap className="mr-2 h-4 w-4 text-yellow-500" />
@@ -350,9 +367,16 @@ export function DeviceCard({
                 Blocked
               </Badge>
             )}
-            {device.hasBWLimit && (
+            {device.isExempt && (
+              <Badge variant="outline" className="text-xs text-emerald-500 border-emerald-500">
+                Exempt
+              </Badge>
+            )}
+            {device.hasBWLimit && !device.isExempt && (
               <Badge variant="secondary" className="text-xs">
-                {formatBandwidth(device.downloadLimit || '0')} limit
+                {device.isDefaultLimit
+                  ? 'Default limit'
+                  : `${formatBandwidth(device.downloadLimit || '0')} limit`}
               </Badge>
             )}
             {(device.status === 'bound' || device.status === 'dynamic') && (
