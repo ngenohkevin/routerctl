@@ -10,10 +10,11 @@ import { RebootDialog } from '@/components/reboot-dialog';
 import { SchedulerDialog } from '@/components/scheduler-dialog';
 import { ScheduledTasks } from '@/components/scheduled-tasks';
 import { DnsSettingsDialog } from '@/components/dns-settings-dialog';
+import { DhcpDnsDialog } from '@/components/dhcp-dns-dialog';
 import { AgentStatus } from '@/components/agent-status';
 import { api, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
-import type { ScheduledTask, HealthStatus, SystemInfo, DnsSettings } from '@/types';
+import type { ScheduledTask, HealthStatus, SystemInfo, DnsSettings, DHCPNetwork } from '@/types';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function SettingsPage() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [dnsSettings, setDnsSettings] = useState<DnsSettings | null>(null);
+  const [dhcpNetworks, setDhcpNetworks] = useState<DHCPNetwork[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Check authentication
@@ -33,11 +35,12 @@ export default function SettingsPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [tasksRes, healthRes, systemRes, dnsRes] = await Promise.all([
+      const [tasksRes, healthRes, systemRes, dnsRes, dhcpRes] = await Promise.all([
         api.getScheduledTasks().catch(() => ({ tasks: [] })),
         api.getHealth().catch(() => null),
         api.getSystem().catch(() => null),
         api.getDnsSettings().catch(() => null),
+        api.getDhcpNetworks().catch(() => ({ networks: [] })),
       ]);
       setTasks(tasksRes.tasks || []);
       setHealth(healthRes);
@@ -47,6 +50,7 @@ export default function SettingsPage() {
       if (dnsRes) {
         setDnsSettings(dnsRes.settings);
       }
+      setDhcpNetworks(dhcpRes.networks || []);
     } catch (error) {
       toast.error('Failed to fetch settings data');
     } finally {
@@ -112,6 +116,19 @@ export default function SettingsPage() {
       }
     } catch (error) {
       toast.error('Failed to update DNS settings');
+      throw error;
+    }
+  };
+
+  const handleSaveDhcpDns = async (networkId: string, dnsServers: string[]) => {
+    try {
+      await api.setDhcpNetworkDns(networkId, dnsServers);
+      toast.success('DHCP DNS settings updated');
+      // Refresh DHCP networks
+      const dhcpRes = await api.getDhcpNetworks().catch(() => ({ networks: [] }));
+      setDhcpNetworks(dhcpRes.networks || []);
+    } catch (error) {
+      toast.error('Failed to update DHCP DNS settings');
       throw error;
     }
   };
@@ -200,38 +217,71 @@ export default function SettingsPage() {
               DNS Settings
             </CardTitle>
             <CardDescription>
-              Configure DNS servers for the router. This affects all devices on the network.
+              Configure DNS servers for the router and DHCP clients.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {dnsSettings && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground">DNS Servers</p>
-                  <p className="font-medium">
-                    {dnsSettings.servers && dnsSettings.servers.length > 0
-                      ? dnsSettings.servers.join(', ')
-                      : 'Not configured'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Allow Remote Requests</p>
-                  <p className="font-medium">
-                    {dnsSettings.allowRemoteRequests ? 'Enabled' : 'Disabled'}
-                  </p>
-                </div>
-                {dnsSettings.cacheSize && (
+            {/* Router DNS */}
+            <div>
+              <p className="text-sm font-medium mb-2">Router DNS</p>
+              {dnsSettings && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                   <div>
-                    <p className="text-muted-foreground">Cache Size</p>
-                    <p className="font-medium">{dnsSettings.cacheSize}</p>
+                    <p className="text-muted-foreground">Servers</p>
+                    <p className="font-medium">
+                      {dnsSettings.servers && dnsSettings.servers.length > 0
+                        ? dnsSettings.servers.join(', ')
+                        : 'Not configured'}
+                    </p>
                   </div>
-                )}
-              </div>
-            )}
+                  <div>
+                    <p className="text-muted-foreground">Remote Requests</p>
+                    <p className="font-medium">
+                      {dnsSettings.allowRemoteRequests ? 'Enabled' : 'Disabled'}
+                    </p>
+                  </div>
+                  {dnsSettings.cacheSize && (
+                    <div>
+                      <p className="text-muted-foreground">Cache Size</p>
+                      <p className="font-medium">{dnsSettings.cacheSize}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* DHCP DNS */}
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium mb-2">DHCP Client DNS</p>
+              {dhcpNetworks.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Network</p>
+                    <p className="font-medium">{dhcpNetworks[0].address}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">DNS Servers</p>
+                    <p className="font-medium">
+                      {dhcpNetworks[0].dnsServers && dhcpNetworks[0].dnsServers.length > 0
+                        ? dhcpNetworks[0].dnsServers.join(', ')
+                        : 'Not configured'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No DHCP networks configured</p>
+              )}
+            </div>
+
             <div className="flex flex-wrap gap-3 pt-2">
               <DnsSettingsDialog
                 currentSettings={dnsSettings}
                 onSave={handleSaveDnsSettings}
+                disabled={!health?.routerConnected}
+              />
+              <DhcpDnsDialog
+                network={dhcpNetworks[0] || null}
+                onSave={handleSaveDhcpDns}
                 disabled={!health?.routerConnected}
               />
               <Button variant="outline" size="sm" onClick={handleFlushDns}>

@@ -9,6 +9,7 @@ import type {
   ScheduledTask,
   DnsCacheEntry,
   DnsSettings,
+  DHCPNetwork,
   PingResult,
   SpeedTestResult,
   TrafficStats,
@@ -422,5 +423,23 @@ export const api = {
     return fetchApi<{ message: string }>(`/dhcp/leases/${encodeURIComponent(mac)}/disable`, {
       method: 'POST',
     });
+  },
+
+  // DHCP Network Configuration
+  async getDhcpNetworks(): Promise<{ networks: DHCPNetwork[] }> {
+    return fetchApi<{ networks: DHCPNetwork[] }>('/dhcp/networks');
+  },
+
+  async setDhcpNetworkDns(
+    networkId: string,
+    dnsServers: string[]
+  ): Promise<{ message: string; dnsServers: string[] }> {
+    return fetchApi<{ message: string; dnsServers: string[] }>(
+      `/dhcp/networks/${encodeURIComponent(networkId)}/dns`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ dnsServers }),
+      }
+    );
   },
 };

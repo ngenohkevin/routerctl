@@ -153,6 +153,15 @@ export interface DnsSettings {
   maxConcurrentQueries: string;
 }
 
+export interface DHCPNetwork {
+  id: string;
+  address: string;
+  gateway: string;
+  dnsServers: string[];
+  domain?: string;
+  comment?: string;
+}
+
 export interface PingResult {
   host: string;
   sent: number;
