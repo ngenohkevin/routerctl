@@ -3,22 +3,24 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Settings, ArrowLeft, Power, Server } from 'lucide-react';
+import { Settings, ArrowLeft, Power, Server, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { RebootDialog } from '@/components/reboot-dialog';
 import { SchedulerDialog } from '@/components/scheduler-dialog';
 import { ScheduledTasks } from '@/components/scheduled-tasks';
+import { DnsSettingsDialog } from '@/components/dns-settings-dialog';
 import { AgentStatus } from '@/components/agent-status';
 import { api, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
-import type { ScheduledTask, HealthStatus, SystemInfo } from '@/types';
+import type { ScheduledTask, HealthStatus, SystemInfo, DnsSettings } from '@/types';
 
 export default function SettingsPage() {
   const router = useRouter();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+  const [dnsSettings, setDnsSettings] = useState<DnsSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Check authentication
@@ -31,15 +33,19 @@ export default function SettingsPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [tasksRes, healthRes, systemRes] = await Promise.all([
+      const [tasksRes, healthRes, systemRes, dnsRes] = await Promise.all([
         api.getScheduledTasks().catch(() => ({ tasks: [] })),
         api.getHealth().catch(() => null),
         api.getSystem().catch(() => null),
+        api.getDnsSettings().catch(() => null),
       ]);
       setTasks(tasksRes.tasks || []);
       setHealth(healthRes);
       if (systemRes) {
         setSystemInfo(systemRes.system);
+      }
+      if (dnsRes) {
+        setDnsSettings(dnsRes.settings);
       }
     } catch (error) {
       toast.error('Failed to fetch settings data');
@@ -92,6 +98,21 @@ export default function SettingsPage() {
       toast.success('DNS cache flushed');
     } catch (error) {
       toast.error('Failed to flush DNS cache');
+    }
+  };
+
+  const handleSaveDnsSettings = async (servers: string[], allowRemoteRequests: boolean) => {
+    try {
+      await api.setDnsSettings(servers, allowRemoteRequests);
+      toast.success('DNS settings updated');
+      // Refresh settings
+      const dnsRes = await api.getDnsSettings().catch(() => null);
+      if (dnsRes) {
+        setDnsSettings(dnsRes.settings);
+      }
+    } catch (error) {
+      toast.error('Failed to update DNS settings');
+      throw error;
     }
   };
 
@@ -167,6 +188,52 @@ export default function SettingsPage() {
                 disabled={!health?.routerConnected}
               />
               <SchedulerDialog onSchedule={handleSchedule} />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* DNS Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Globe className="h-5 w-5" />
+              DNS Settings
+            </CardTitle>
+            <CardDescription>
+              Configure DNS servers for the router. This affects all devices on the network.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {dnsSettings && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">DNS Servers</p>
+                  <p className="font-medium">
+                    {dnsSettings.servers.length > 0
+                      ? dnsSettings.servers.join(', ')
+                      : 'Not configured'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Allow Remote Requests</p>
+                  <p className="font-medium">
+                    {dnsSettings.allowRemoteRequests ? 'Enabled' : 'Disabled'}
+                  </p>
+                </div>
+                {dnsSettings.cacheSize && (
+                  <div>
+                    <p className="text-muted-foreground">Cache Size</p>
+                    <p className="font-medium">{dnsSettings.cacheSize}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-3 pt-2">
+              <DnsSettingsDialog
+                currentSettings={dnsSettings}
+                onSave={handleSaveDnsSettings}
+                disabled={!health?.routerConnected}
+              />
               <Button variant="outline" size="sm" onClick={handleFlushDns}>
                 Flush DNS Cache
               </Button>

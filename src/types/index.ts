@@ -145,6 +145,14 @@ export interface DnsCacheEntry {
   static: boolean;
 }
 
+export interface DnsSettings {
+  servers: string[];
+  allowRemoteRequests: boolean;
+  cacheSize: string;
+  cacheMaxTTL: string;
+  maxConcurrentQueries: string;
+}
+
 export interface PingResult {
   host: string;
   sent: number;

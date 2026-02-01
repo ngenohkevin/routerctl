@@ -8,6 +8,7 @@ import type {
   DefaultBandwidthConfig,
   ScheduledTask,
   DnsCacheEntry,
+  DnsSettings,
   PingResult,
   SpeedTestResult,
   TrafficStats,
@@ -269,6 +270,20 @@ export const api = {
 
   async flushDnsCache(): Promise<{ message: string }> {
     return fetchApi<{ message: string }>('/dns/flush', { method: 'POST' });
+  },
+
+  async getDnsSettings(): Promise<{ settings: DnsSettings }> {
+    return fetchApi<{ settings: DnsSettings }>('/dns/settings');
+  },
+
+  async setDnsSettings(
+    servers: string[],
+    allowRemoteRequests?: boolean
+  ): Promise<{ message: string; servers: string[] }> {
+    return fetchApi<{ message: string; servers: string[] }>('/dns/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ servers, allowRemoteRequests }),
+    });
   },
 
   // Network Tools
