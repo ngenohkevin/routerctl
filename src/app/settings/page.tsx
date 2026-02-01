@@ -209,7 +209,7 @@ export default function SettingsPage() {
                 <div>
                   <p className="text-muted-foreground">DNS Servers</p>
                   <p className="font-medium">
-                    {dnsSettings.servers.length > 0
+                    {dnsSettings.servers && dnsSettings.servers.length > 0
                       ? dnsSettings.servers.join(', ')
                       : 'Not configured'}
                   </p>

@@ -44,12 +44,12 @@ export function DnsSettingsDialog({
   // Initialize form when dialog opens or settings change
   useEffect(() => {
     if (currentSettings && open) {
-      const currentServers = currentSettings.servers || [];
+      const currentServers = currentSettings.servers ?? [];
       setServers([
-        currentServers[0] || '',
-        currentServers[1] || '',
+        currentServers[0] ?? '',
+        currentServers[1] ?? '',
       ]);
-      setAllowRemoteRequests(currentSettings.allowRemoteRequests);
+      setAllowRemoteRequests(currentSettings.allowRemoteRequests ?? false);
     }
   }, [currentSettings, open]);
 
@@ -181,7 +181,7 @@ export function DnsSettingsDialog({
               <div className="rounded-md bg-muted p-3 text-sm">
                 <p className="font-medium mb-1">Current Configuration</p>
                 <p className="text-muted-foreground">
-                  Servers: {currentSettings.servers.length > 0
+                  Servers: {currentSettings.servers && currentSettings.servers.length > 0
                     ? currentSettings.servers.join(', ')
                     : 'Not configured'}
                 </p>
