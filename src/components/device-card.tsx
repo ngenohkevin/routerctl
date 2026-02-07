@@ -95,7 +95,7 @@ export function DeviceCard({
   const [isLoading, setIsLoading] = useState(false);
 
   // WiFi devices have signal strength data, or are mobile devices, or have private MACs (typically WiFi)
-  const mobileTypes = ['phone', 'tablet', 'mobile'];
+  const mobileTypes = ['phone', 'tablet', 'mobile', 'watch', 'apple', 'android'];
   const hasPrivateMAC = device.vendor === 'Private Address';
   // Private MACs are used by phones AND modern laptops on WiFi, so assume WiFi for them
   const isWifi = !!device.signalStrength ||
@@ -288,7 +288,14 @@ export function DeviceCard({
                   {device.deviceIcon}
                 </span>
               ) : null}
-              <span className="text-xs capitalize">{device.deviceType || 'Unknown'}</span>
+              {device.deviceModel ? (
+                <div className="flex flex-col items-end">
+                  <span className="text-xs font-medium">{device.deviceModel}</span>
+                  <span className="text-[10px] text-muted-foreground capitalize">{device.deviceType}</span>
+                </div>
+              ) : (
+                <span className="text-xs capitalize">{device.deviceType || 'Unknown'}</span>
+              )}
             </div>
           </div>
           <div className="flex justify-between">

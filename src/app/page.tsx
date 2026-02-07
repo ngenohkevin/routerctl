@@ -195,7 +195,7 @@ export default function Dashboard() {
   };
 
   // Helper to check if device is WiFi (has signal, is mobile type, or has private MAC)
-  const mobileTypes = ['phone', 'tablet', 'mobile'];
+  const mobileTypes = ['phone', 'tablet', 'mobile', 'watch', 'apple', 'android'];
   const isWifiDevice = (d: Device) =>
     !!d.signalStrength ||
     mobileTypes.includes(d.deviceType?.toLowerCase() || '') ||

@@ -21,6 +21,7 @@ export interface Device {
   vendor?: string;
   deviceType?: string;
   deviceIcon?: string;
+  deviceModel?: string;
   // Bandwidth usage (from queue stats)
   bytesIn?: string;
   bytesOut?: string;
