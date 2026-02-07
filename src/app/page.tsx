@@ -194,12 +194,19 @@ export default function Dashboard() {
     }
   };
 
-  // Helper to check if device is WiFi (has signal, is mobile type, or has private MAC)
+  // Check if MAC uses randomized/private addressing (2nd hex digit is 2, 6, A, or E)
+  const hasRandomizedMAC = (mac: string) => {
+    if (mac.length < 2) return false;
+    const ch = mac[1].toUpperCase();
+    return ch === '2' || ch === '6' || ch === 'A' || ch === 'E';
+  };
+
+  // Helper to check if device is WiFi (has signal, is mobile type, or has randomized MAC)
   const mobileTypes = ['phone', 'tablet', 'mobile', 'watch', 'apple', 'android'];
   const isWifiDevice = (d: Device) =>
     !!d.signalStrength ||
     mobileTypes.includes(d.deviceType?.toLowerCase() || '') ||
-    d.vendor === 'Private Address';
+    hasRandomizedMAC(d.mac);
 
   // Exclude WAN devices from main list (they're upstream, not our network)
   const lanDevices = devices.filter((d) => d.interface !== 'WAN');

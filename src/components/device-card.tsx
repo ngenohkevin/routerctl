@@ -35,6 +35,13 @@ import {
 import type { Device } from '@/types';
 import { cn, getSignalQuality, formatBandwidth, formatDuration } from '@/lib/utils';
 
+// Check if MAC uses randomized/private addressing (2nd hex digit is 2, 6, A, or E)
+function hasRandomizedMAC(mac: string): boolean {
+  if (mac.length < 2) return false;
+  const secondChar = mac[1].toUpperCase();
+  return secondChar === '2' || secondChar === '6' || secondChar === 'A' || secondChar === 'E';
+}
+
 function formatBytes(bytes: string | undefined): string {
   if (!bytes) return '0 B';
   const num = parseInt(bytes, 10);
@@ -94,13 +101,14 @@ export function DeviceCard({
 }: DeviceCardProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  // WiFi devices have signal strength data, or are mobile devices, or have private MACs (typically WiFi)
+  // WiFi devices have signal strength data, or are mobile devices, or have randomized MACs (typically WiFi)
   const mobileTypes = ['phone', 'tablet', 'mobile', 'watch', 'apple', 'android'];
-  const hasPrivateMAC = device.vendor === 'Private Address';
-  // Private MACs are used by phones AND modern laptops on WiFi, so assume WiFi for them
+  // Check actual MAC pattern (survives mDNS enrichment that may change vendor from "Private Address")
+  const isRandomMAC = hasRandomizedMAC(device.mac);
+  // Randomized MACs are used by phones AND modern laptops on WiFi, so assume WiFi for them
   const isWifi = !!device.signalStrength ||
     mobileTypes.includes(device.deviceType?.toLowerCase() || '') ||
-    hasPrivateMAC;
+    isRandomMAC;
   const isWan = device.interface === 'WAN';
   const isOnline = device.status === 'bound' || device.status === 'dynamic';
   const signalQuality = getSignalQuality(device.signalStrength);
@@ -176,7 +184,7 @@ export function DeviceCard({
             <Cable className="h-4 w-4 text-green-500" />
           )}
           <CardTitle className="text-sm font-medium">
-            {device.comment || device.hostname || (isWan ? 'Gateway' : device.vendor) || device.ip}
+            {device.comment || device.hostname || (isWan ? 'Gateway' : (device.deviceModel || device.vendor)) || device.ip}
           </CardTitle>
         </div>
         <DropdownMenu>
@@ -188,7 +196,7 @@ export function DeviceCard({
           <DropdownMenuContent align="end">
             {onRename && (
               <DropdownMenuItem
-                onClick={() => onRename(device.mac, device.comment || device.hostname || device.vendor || '')}
+                onClick={() => onRename(device.mac, device.comment || device.hostname || device.deviceModel || device.vendor || '')}
               >
                 <Edit3 className="mr-2 h-4 w-4" />
                 Rename Device
