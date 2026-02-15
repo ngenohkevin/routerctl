@@ -236,7 +236,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8 overflow-x-hidden">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4">
@@ -349,21 +349,21 @@ export default function Dashboard() {
         {/* Main content */}
         <div className="grid lg:grid-cols-4 gap-6">
           {/* Devices section */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-3 min-w-0">
             <Tabs defaultValue="all" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="all">Connected ({stats.total})</TabsTrigger>
-                <TabsTrigger value="wifi">WiFi ({stats.wifi})</TabsTrigger>
-                <TabsTrigger value="ethernet">
+              <TabsList className="w-full max-w-full overflow-x-auto">
+                <TabsTrigger value="all" className="flex-none">Connected ({stats.total})</TabsTrigger>
+                <TabsTrigger value="wifi" className="flex-none">WiFi ({stats.wifi})</TabsTrigger>
+                <TabsTrigger value="ethernet" className="flex-none">
                   Ethernet ({stats.ethernet})
                 </TabsTrigger>
                 {stats.disconnected > 0 && (
-                  <TabsTrigger value="disconnected">
+                  <TabsTrigger value="disconnected" className="flex-none">
                     Offline ({stats.disconnected})
                   </TabsTrigger>
                 )}
                 {stats.blocked > 0 && (
-                  <TabsTrigger value="blocked">
+                  <TabsTrigger value="blocked" className="flex-none">
                     Blocked ({stats.blocked})
                   </TabsTrigger>
                 )}

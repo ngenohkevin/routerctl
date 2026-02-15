@@ -170,20 +170,20 @@ export function DeviceCard({
   return (
     <Card
       className={cn(
-        'transition-all duration-200 hover:shadow-md',
+        'transition-all duration-200 hover:shadow-md overflow-hidden min-w-0',
         device.isBlocked && 'opacity-60 border-destructive/50'
       )}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {!isOnline ? (
-            <WifiOff className="h-4 w-4 text-muted-foreground" />
+            <WifiOff className="h-4 w-4 shrink-0 text-muted-foreground" />
           ) : isWifi ? (
-            <Wifi className="h-4 w-4 text-blue-500" />
+            <Wifi className="h-4 w-4 shrink-0 text-blue-500" />
           ) : (
-            <Cable className="h-4 w-4 text-green-500" />
+            <Cable className="h-4 w-4 shrink-0 text-green-500" />
           )}
-          <CardTitle className="text-sm font-medium">
+          <CardTitle className="text-sm font-medium truncate">
             {device.comment || device.hostname || (isWan ? 'Gateway' : (device.deviceModel || device.vendor)) || device.ip}
           </CardTitle>
         </div>
@@ -310,14 +310,14 @@ export function DeviceCard({
             <span className="text-muted-foreground">IP Address</span>
             <span className="font-mono">{device.ip}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">MAC</span>
-            <span className="font-mono text-xs">{device.mac}</span>
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground shrink-0">MAC</span>
+            <span className="font-mono text-xs truncate">{device.mac}</span>
           </div>
           {device.vendor && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Vendor</span>
-              <span className="text-xs">{device.vendor}</span>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground shrink-0">Vendor</span>
+              <span className="text-xs truncate">{device.vendor}</span>
             </div>
           )}
           {device.interface && (
@@ -376,7 +376,7 @@ export function DeviceCard({
               </div>
             </div>
           )}
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-wrap gap-2 pt-2">
             {device.isBlocked && (
               <Badge variant="destructive" className="text-xs">
                 Blocked
