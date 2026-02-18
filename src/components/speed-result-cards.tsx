@@ -1,40 +1,47 @@
 'use client';
 
-import { ArrowDown, ArrowUp, Clock, Activity } from 'lucide-react';
+import { ArrowDown, ArrowUp, Clock, Activity, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { NetSpeedTestResult } from '@/types';
 
 interface SpeedResultCardsProps {
-  result: NetSpeedTestResult | null;
+  ping: number | null;    // ms — available after ping phase
+  jitter: number | null;  // ms — available after ping phase
+  download: number | null; // Mbps — available after download phase
+  upload: number | null;   // Mbps — available after upload phase
+  phase: 'idle' | 'ping' | 'download' | 'upload' | 'done';
 }
 
-export function SpeedResultCards({ result }: SpeedResultCardsProps) {
-  if (!result) return null;
+export function SpeedResultCards({ ping, jitter, download, upload, phase }: SpeedResultCardsProps) {
+  if (phase === 'idle') return null;
 
   const cards = [
     {
       title: 'Download',
-      value: `${result.download.toFixed(2)} Mbps`,
+      value: download !== null ? `${download.toFixed(2)} Mbps` : null,
       icon: ArrowDown,
       color: 'text-green-500',
+      active: phase === 'download',
     },
     {
       title: 'Upload',
-      value: `${result.upload.toFixed(2)} Mbps`,
+      value: upload !== null ? `${upload.toFixed(2)} Mbps` : null,
       icon: ArrowUp,
       color: 'text-blue-500',
+      active: phase === 'upload',
     },
     {
       title: 'Ping',
-      value: `${result.ping.toFixed(1)} ms`,
+      value: ping !== null ? `${ping.toFixed(1)} ms` : null,
       icon: Clock,
       color: 'text-yellow-500',
+      active: phase === 'ping',
     },
     {
       title: 'Jitter',
-      value: `${result.jitter.toFixed(1)} ms`,
+      value: jitter !== null ? `${jitter.toFixed(1)} ms` : null,
       icon: Activity,
       color: 'text-purple-500',
+      active: phase === 'ping',
     },
   ];
 
@@ -49,7 +56,13 @@ export function SpeedResultCards({ result }: SpeedResultCardsProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${card.color}`}>{card.value}</div>
+            {card.value !== null ? (
+              <div className={`text-2xl font-bold ${card.color}`}>{card.value}</div>
+            ) : card.active ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <div className="text-2xl font-bold text-muted-foreground/30">—</div>
+            )}
           </CardContent>
         </Card>
       ))}

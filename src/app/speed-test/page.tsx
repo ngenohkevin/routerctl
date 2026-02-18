@@ -32,6 +32,12 @@ export default function SpeedTestPage() {
   const [gaugeLabel, setGaugeLabel] = useState('Ready');
   const [lastResult, setLastResult] = useState<NetSpeedTestResult | null>(null);
 
+  // Progressive result cards — show each metric as its phase completes
+  const [cardPing, setCardPing] = useState<number | null>(null);
+  const [cardJitter, setCardJitter] = useState<number | null>(null);
+  const [cardDownload, setCardDownload] = useState<number | null>(null);
+  const [cardUpload, setCardUpload] = useState<number | null>(null);
+
   // Latency state
   const [latencyTargets, setLatencyTargets] = useState<LatencyTarget[]>([]);
   const [latencyLoading, setLatencyLoading] = useState(false);
@@ -81,6 +87,14 @@ export default function SpeedTestPage() {
     setGaugePing(0);
     setPhase('ping');
     setGaugeLabel('Measuring ping...');
+    setCardPing(null);
+    setCardJitter(null);
+    setCardDownload(null);
+    setCardUpload(null);
+
+    let pingDone = false;
+    let downloadDone = false;
+    let lastDownload = 0;
 
     const cleanup = api.runNetSpeedTest(undefined, (ev) => {
       if (ev.phase === 'ping') {
@@ -90,12 +104,24 @@ export default function SpeedTestPage() {
           setGaugeLabel('Measuring ping...');
         }
       } else if (ev.phase === 'download') {
+        // Ping just finished — lock in ping/jitter cards
+        if (!pingDone) {
+          pingDone = true;
+          setCardPing(ev.ping);
+          setCardJitter(ev.jitter);
+        }
         setPhase('download');
         setGaugeLabel('Testing download...');
         if (ev.speed > 0) {
           setGaugeValue(ev.speed);
+          lastDownload = ev.speed;
         }
       } else if (ev.phase === 'upload') {
+        // Download just finished — lock in download card
+        if (!downloadDone) {
+          downloadDone = true;
+          setCardDownload(lastDownload);
+        }
         setPhase('upload');
         setGaugeLabel('Testing upload...');
         if (ev.speed > 0) {
@@ -103,6 +129,10 @@ export default function SpeedTestPage() {
         }
       } else if (ev.phase === 'done' && ev.result) {
         setLastResult(ev.result);
+        setCardPing(ev.result.ping);
+        setCardJitter(ev.result.jitter);
+        setCardDownload(ev.result.download);
+        setCardUpload(ev.result.upload);
         setGaugeValue(ev.result.download);
         setGaugeLabel(`${ev.result.server.sponsor} — ${ev.result.server.name}`);
         setPhase('done');
@@ -213,7 +243,13 @@ export default function SpeedTestPage() {
               </CardContent>
             </Card>
 
-            <SpeedResultCards result={lastResult} />
+            <SpeedResultCards
+              ping={cardPing}
+              jitter={cardJitter}
+              download={cardDownload}
+              upload={cardUpload}
+              phase={phase}
+            />
           </TabsContent>
 
           {/* Latency Tab */}
