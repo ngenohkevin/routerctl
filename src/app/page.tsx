@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Router, RefreshCw, Wifi, Cable, Ban, Settings, LogOut, ScrollText, Network } from 'lucide-react';
+import { Router, RefreshCw, Wifi, Cable, Ban, Settings, LogOut, ScrollText, Network, Gauge } from 'lucide-react';
 import { api, isAuthenticated } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -264,6 +264,12 @@ export default function Dashboard() {
                 <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3">
                   <Network className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">DHCP</span>
+                </Button>
+              </Link>
+              <Link href="/speed-test">
+                <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3">
+                  <Gauge className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Speed Test</span>
                 </Button>
               </Link>
               <Link href="/settings">

@@ -237,3 +237,40 @@ export interface DHCPLeasesResponse {
   leases: DHCPLease[];
   count: number;
 }
+
+// Network Speed Test (runs from Pi, not router)
+export interface NetSpeedTestResult {
+  id: string;
+  timestamp: string;
+  server: SpeedTestServer;
+  download: number; // Mbps
+  upload: number;   // Mbps
+  ping: number;     // ms
+  jitter: number;   // ms
+}
+
+export interface SpeedTestServer {
+  id: string;
+  name: string;
+  host: string;
+  country: string;
+  sponsor: string;
+  distance: number; // km
+  latency: number;  // ms
+}
+
+export interface LatencyTarget {
+  name: string;
+  host: string;
+  ping: number;   // ms
+  jitter: number; // ms
+  loss: number;   // percentage
+  min: number;    // ms
+  max: number;    // ms
+  error?: string;
+}
+
+export interface LatencyResult {
+  timestamp: string;
+  targets: LatencyTarget[];
+}

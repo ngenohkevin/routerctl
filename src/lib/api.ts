@@ -18,6 +18,9 @@ import type {
   LogsResponse,
   DHCPLease,
   DHCPLeasesResponse,
+  NetSpeedTestResult,
+  SpeedTestServer,
+  LatencyResult,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -441,5 +444,33 @@ export const api = {
         body: JSON.stringify({ dnsServers }),
       }
     );
+  },
+
+  // Network Speed Test (runs from Pi)
+  async runNetSpeedTest(serverID?: string): Promise<{ result: NetSpeedTestResult }> {
+    return fetchApi<{ result: NetSpeedTestResult }>('/nettest/speedtest', {
+      method: 'POST',
+      body: JSON.stringify({ serverID }),
+    });
+  },
+
+  async runNetLatency(targets?: string[], count?: number): Promise<{ result: LatencyResult }> {
+    return fetchApi<{ result: LatencyResult }>('/nettest/latency', {
+      method: 'POST',
+      body: JSON.stringify({ targets, count }),
+    });
+  },
+
+  async listSpeedTestServers(): Promise<{ servers: SpeedTestServer[] }> {
+    return fetchApi<{ servers: SpeedTestServer[] }>('/nettest/servers');
+  },
+
+  async getSpeedTestHistory(limit?: number): Promise<{ results: NetSpeedTestResult[]; count: number }> {
+    const params = limit ? `?limit=${limit}` : '';
+    return fetchApi<{ results: NetSpeedTestResult[]; count: number }>(`/nettest/history${params}`);
+  },
+
+  async clearSpeedTestHistory(): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/nettest/history', { method: 'DELETE' });
   },
 };
