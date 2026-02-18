@@ -11,7 +11,6 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
   const radius = 90;
   const strokeWidth = 12;
   const center = 110;
-  // Arc from 135deg to 405deg (270deg sweep)
   const startAngle = 135;
   const endAngle = 405;
   const sweep = endAngle - startAngle;
@@ -21,7 +20,6 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
   const progress = max > 0 ? clamped / max : 0;
   const offset = circumference * (1 - progress);
 
-  // Convert angle to SVG arc coordinates
   const polarToCartesian = (angle: number) => {
     const rad = (angle * Math.PI) / 180;
     return {
@@ -36,7 +34,6 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
 
   const bgPath = `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`;
 
-  // Color based on phase
   const strokeColor =
     phase === 'download'
       ? 'hsl(142, 76%, 36%)'
@@ -48,7 +45,8 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
             ? 'hsl(142, 76%, 36%)'
             : 'hsl(215, 20%, 50%)';
 
-  const isAnimating = phase === 'ping' || phase === 'download' || phase === 'upload';
+  const isRunning = phase === 'ping' || phase === 'download' || phase === 'upload';
+  const showValue = phase === 'done' && value > 0;
 
   return (
     <div className="flex flex-col items-center">
@@ -61,17 +59,45 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
-        {/* Progress arc */}
-        <path
-          d={bgPath}
-          fill="none"
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className={isAnimating ? 'transition-all duration-500' : 'transition-all duration-300'}
-        />
+        {/* Progress arc — shows result when done, hidden when running */}
+        {showValue && (
+          <path
+            d={bgPath}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className="transition-all duration-700 ease-out"
+          />
+        )}
+        {/* Pulsing arc indicator while test is running */}
+        {isRunning && (
+          <path
+            d={bgPath}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={circumference * 0.75}
+            opacity={0.6}
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              values={`${circumference * 0.85};${circumference * 0.6};${circumference * 0.85}`}
+              dur="1.5s"
+              repeatCount="indefinite"
+            />
+            <animate
+              attributeName="opacity"
+              values="0.4;0.8;0.4"
+              dur="1.5s"
+              repeatCount="indefinite"
+            />
+          </path>
+        )}
         {/* Value text */}
         <text
           x={center}
@@ -81,7 +107,7 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
           fontSize="36"
           fontWeight="bold"
         >
-          {value > 0 ? value.toFixed(1) : '—'}
+          {showValue ? value.toFixed(1) : '—'}
         </text>
         <text
           x={center}
@@ -92,14 +118,17 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
         >
           Mbps
         </text>
+        {/* Label — truncate long server names */}
         <text
           x={center}
           y={center + 35}
           textAnchor="middle"
-          fontSize="12"
+          fontSize="11"
           fill={strokeColor}
+          textLength={label.length > 30 ? '180' : undefined}
+          lengthAdjust="spacing"
         >
-          {label}
+          {label.length > 40 ? label.slice(0, 38) + '...' : label}
         </text>
       </svg>
     </div>

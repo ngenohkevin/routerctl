@@ -78,40 +78,28 @@ export default function SpeedTestPage() {
     setLastResult(null);
     setGaugeValue(0);
 
-    // Animate through phases while waiting for the blocking POST
+    // Show phase labels on a timer while waiting for the blocking POST.
+    // The gauge stays at 0 during ping, then shows a pulsing indicator
+    // during download/upload. No fake speed values — only the real result.
     setPhase('ping');
     setGaugeLabel('Measuring ping...');
 
-    // Simulate gauge movement during test
-    let tick = 0;
+    let elapsed = 0;
     animationRef.current = setInterval(() => {
-      tick++;
-      if (tick < 15) {
-        // Ping phase (0-3s)
-        setGaugeValue(0);
-      } else if (tick < 75) {
-        // Download phase (3-15s)
+      elapsed++;
+      if (elapsed === 10) {
+        // ~2s in — switch to download phase label
         setPhase('download');
         setGaugeLabel('Testing download...');
-        // Gradually increase gauge to simulate download speed appearing
-        setGaugeValue((prev) => {
-          const target = 20 + Math.random() * 30;
-          return prev + (target - prev) * 0.1;
-        });
-      } else {
-        // Upload phase (15-30s)
+      } else if (elapsed === 70) {
+        // ~14s in — switch to upload phase label
         setPhase('upload');
         setGaugeLabel('Testing upload...');
-        setGaugeValue((prev) => {
-          const target = 10 + Math.random() * 20;
-          return prev + (target - prev) * 0.1;
-        });
       }
     }, 200);
 
     try {
       const res = await api.runNetSpeedTest();
-      // Clear animation
       if (animationRef.current) {
         clearInterval(animationRef.current);
         animationRef.current = null;
