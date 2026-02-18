@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Gauge, ArrowLeft, RefreshCw, Play, Trash2, Radio,
+  Gauge, ArrowLeft, RefreshCw, Play, Trash2, Radio, Tv,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { SpeedGauge } from '@/components/speed-gauge';
 import { SpeedResultCards } from '@/components/speed-result-cards';
 import { LatencyTable } from '@/components/latency-table';
 import { SpeedHistoryChart } from '@/components/speed-history-chart';
+import { StreamingCalculator } from '@/components/streaming-calculator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
@@ -199,8 +200,9 @@ export default function SpeedTestPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="speedtest">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="speedtest">Speed Test</TabsTrigger>
+            <TabsTrigger value="streaming">Streaming</TabsTrigger>
             <TabsTrigger value="latency">Latency</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
@@ -351,6 +353,11 @@ export default function SpeedTestPage() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* Streaming Tab */}
+          <TabsContent value="streaming" className="space-y-6">
+            <StreamingCalculator downloadSpeed={lastResult?.download ?? null} />
           </TabsContent>
         </Tabs>
       </div>
