@@ -446,12 +446,39 @@ export const api = {
     );
   },
 
-  // Network Speed Test (runs from Pi)
-  async runNetSpeedTest(serverID?: string): Promise<{ result: NetSpeedTestResult }> {
-    return fetchApi<{ result: NetSpeedTestResult }>('/nettest/speedtest', {
-      method: 'POST',
-      body: JSON.stringify({ serverID }),
+  // Network Speed Test (runs from Pi) — SSE streaming
+  runNetSpeedTest(
+    serverID: string | undefined,
+    onProgress: (event: {
+      phase: string;
+      speed: number;
+      ping: number;
+      jitter: number;
+      server: SpeedTestServer;
+      result?: NetSpeedTestResult;
+      error?: string;
+    }) => void
+  ): () => void {
+    const token = getToken();
+    const params = new URLSearchParams();
+    if (serverID) params.set('serverID', serverID);
+    if (token) params.set('token', token);
+
+    const url = `${API_BASE}/nettest/speedtest?${params.toString()}`;
+    const eventSource = new EventSource(url);
+
+    eventSource.addEventListener('progress', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        onProgress(data);
+      } catch {}
     });
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return () => eventSource.close();
   },
 
   async runNetLatency(targets?: string[], count?: number): Promise<{ result: LatencyResult }> {

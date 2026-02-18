@@ -46,7 +46,9 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
             : 'hsl(215, 20%, 50%)';
 
   const isRunning = phase === 'ping' || phase === 'download' || phase === 'upload';
-  const showValue = phase === 'done' && value > 0;
+  const showValue = value > 0;
+  const showArc = value > 0 && (phase === 'download' || phase === 'upload' || phase === 'done');
+  const showPulse = phase === 'ping';
 
   return (
     <div className="flex flex-col items-center">
@@ -59,8 +61,8 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
-        {/* Progress arc — shows result when done, hidden when running */}
-        {showValue && (
+        {/* Progress arc — live during download/upload, final on done */}
+        {showArc && (
           <path
             d={bgPath}
             fill="none"
@@ -69,11 +71,11 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
-            className="transition-all duration-700 ease-out"
+            className="transition-all duration-500 ease-out"
           />
         )}
-        {/* Pulsing arc indicator while test is running */}
-        {isRunning && (
+        {/* Pulsing indicator during ping phase (no speed data yet) */}
+        {showPulse && (
           <path
             d={bgPath}
             fill="none"

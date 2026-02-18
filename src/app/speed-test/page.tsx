@@ -7,7 +7,7 @@ import {
   Gauge, ArrowLeft, RefreshCw, Play, Trash2, Radio,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentStatus } from '@/components/agent-status';
 import { SpeedGauge } from '@/components/speed-gauge';
@@ -39,7 +39,7 @@ export default function SpeedTestPage() {
   const [history, setHistory] = useState<NetSpeedTestResult[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
-  const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -52,10 +52,10 @@ export default function SpeedTestPage() {
     fetchHistory();
   }, []);
 
-  // Cleanup animation on unmount
+  // Cleanup SSE on unmount
   useEffect(() => {
     return () => {
-      if (animationRef.current) clearInterval(animationRef.current);
+      if (cleanupRef.current) cleanupRef.current();
     };
   }, []);
 
@@ -72,56 +72,47 @@ export default function SpeedTestPage() {
     }
   };
 
-  const startSpeedTest = async () => {
+  const startSpeedTest = () => {
     if (phase !== 'idle' && phase !== 'done') return;
 
     setLastResult(null);
     setGaugeValue(0);
-
-    // Show phase labels on a timer while waiting for the blocking POST.
-    // The gauge stays at 0 during ping, then shows a pulsing indicator
-    // during download/upload. No fake speed values — only the real result.
     setPhase('ping');
     setGaugeLabel('Measuring ping...');
 
-    let elapsed = 0;
-    animationRef.current = setInterval(() => {
-      elapsed++;
-      if (elapsed === 10) {
-        // ~2s in — switch to download phase label
+    const cleanup = api.runNetSpeedTest(undefined, (ev) => {
+      if (ev.phase === 'ping') {
+        setPhase('ping');
+        if (ev.ping > 0) {
+          setGaugeLabel(`Ping: ${ev.ping.toFixed(1)} ms`);
+        }
+      } else if (ev.phase === 'download') {
         setPhase('download');
         setGaugeLabel('Testing download...');
-      } else if (elapsed === 70) {
-        // ~14s in — switch to upload phase label
+        if (ev.speed > 0) {
+          setGaugeValue(ev.speed);
+        }
+      } else if (ev.phase === 'upload') {
         setPhase('upload');
         setGaugeLabel('Testing upload...');
+        if (ev.speed > 0) {
+          setGaugeValue(ev.speed);
+        }
+      } else if (ev.phase === 'done' && ev.result) {
+        setLastResult(ev.result);
+        setGaugeValue(ev.result.download);
+        setGaugeLabel(`${ev.result.server.sponsor} — ${ev.result.server.name}`);
+        setPhase('done');
+        fetchHistory();
+      } else if (ev.phase === 'error') {
+        setPhase('idle');
+        setGaugeValue(0);
+        setGaugeLabel('Ready');
+        toast.error(ev.error || 'Speed test failed');
       }
-    }, 200);
+    });
 
-    try {
-      const res = await api.runNetSpeedTest();
-      if (animationRef.current) {
-        clearInterval(animationRef.current);
-        animationRef.current = null;
-      }
-
-      setLastResult(res.result);
-      setGaugeValue(res.result.download);
-      setGaugeLabel(`${res.result.server.sponsor} — ${res.result.server.name}`);
-      setPhase('done');
-
-      // Refresh history
-      fetchHistory();
-    } catch (error) {
-      if (animationRef.current) {
-        clearInterval(animationRef.current);
-        animationRef.current = null;
-      }
-      setPhase('idle');
-      setGaugeValue(0);
-      setGaugeLabel('Ready');
-      toast.error(error instanceof Error ? error.message : 'Speed test failed');
-    }
+    cleanupRef.current = cleanup;
   };
 
   const runLatencyTest = async () => {
