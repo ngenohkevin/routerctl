@@ -446,7 +446,7 @@ export const api = {
     );
   },
 
-  // Network Speed Test (runs from Pi) — SSE streaming
+  // Network Speed Test (runs from Pi) — SSE streaming via fetch ReadableStream
   runNetSpeedTest(
     serverID: string | undefined,
     onProgress: (event: {
@@ -462,23 +462,66 @@ export const api = {
     const token = getToken();
     const params = new URLSearchParams();
     if (serverID) params.set('serverID', serverID);
-    if (token) params.set('token', token);
 
-    const url = `${API_BASE}/nettest/speedtest?${params.toString()}`;
-    const eventSource = new EventSource(url);
+    const controller = new AbortController();
 
-    eventSource.addEventListener('progress', (event) => {
+    (async () => {
       try {
-        const data = JSON.parse(event.data);
-        onProgress(data);
-      } catch {}
-    });
+        const headers: Record<string, string> = {
+          'Accept': 'text/event-stream',
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
 
-    eventSource.onerror = () => {
-      eventSource.close();
-    };
+        const response = await fetch(`${API_BASE}/nettest/speedtest?${params.toString()}`, {
+          headers,
+          signal: controller.signal,
+          cache: 'no-store',
+        });
 
-    return () => eventSource.close();
+        if (!response.ok || !response.body) {
+          const err = await response.json().catch(() => ({ error: 'Speed test failed' }));
+          onProgress({ phase: 'error', speed: 0, ping: 0, jitter: 0, server: {} as SpeedTestServer, error: err.error });
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse SSE events from buffer
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+          let dataLine = '';
+          for (const line of lines) {
+            if (line.startsWith('data:')) {
+              dataLine = line.slice(5).trim();
+            } else if (line === '' && dataLine) {
+              // Empty line = end of event
+              try {
+                const data = JSON.parse(dataLine);
+                onProgress(data);
+              } catch {}
+              dataLine = '';
+            }
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          onProgress({ phase: 'error', speed: 0, ping: 0, jitter: 0, server: {} as SpeedTestServer, error: 'Connection lost' });
+        }
+      }
+    })();
+
+    return () => controller.abort();
   },
 
   async runNetLatency(targets?: string[], count?: number): Promise<{ result: LatencyResult }> {
