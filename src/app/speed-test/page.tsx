@@ -28,6 +28,7 @@ export default function SpeedTestPage() {
   // Speed test state
   const [phase, setPhase] = useState<SpeedPhase>('idle');
   const [gaugeValue, setGaugeValue] = useState(0);
+  const [gaugePing, setGaugePing] = useState(0);
   const [gaugeLabel, setGaugeLabel] = useState('Ready');
   const [lastResult, setLastResult] = useState<NetSpeedTestResult | null>(null);
 
@@ -77,6 +78,7 @@ export default function SpeedTestPage() {
 
     setLastResult(null);
     setGaugeValue(0);
+    setGaugePing(0);
     setPhase('ping');
     setGaugeLabel('Measuring ping...');
 
@@ -84,7 +86,8 @@ export default function SpeedTestPage() {
       if (ev.phase === 'ping') {
         setPhase('ping');
         if (ev.ping > 0) {
-          setGaugeLabel(`Ping: ${ev.ping.toFixed(1)} ms`);
+          setGaugePing(ev.ping);
+          setGaugeLabel('Measuring ping...');
         }
       } else if (ev.phase === 'download') {
         setPhase('download');
@@ -181,6 +184,7 @@ export default function SpeedTestPage() {
                   max={gaugeMax}
                   label={gaugeLabel}
                   phase={phase}
+                  ping={gaugePing}
                 />
                 <Button
                   size="lg"

@@ -1,13 +1,14 @@
 'use client';
 
 interface SpeedGaugeProps {
-  value: number; // Mbps
+  value: number; // Mbps (or ms during ping)
   max?: number;
   label: string;
   phase?: 'idle' | 'ping' | 'download' | 'upload' | 'done';
+  ping?: number; // ms — shown during ping phase
 }
 
-export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGaugeProps) {
+export function SpeedGauge({ value, max = 100, label, phase = 'idle', ping = 0 }: SpeedGaugeProps) {
   const radius = 90;
   const strokeWidth = 12;
   const center = 110;
@@ -46,7 +47,10 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
             : 'hsl(215, 20%, 50%)';
 
   const isRunning = phase === 'ping' || phase === 'download' || phase === 'upload';
-  const showValue = value > 0;
+  const isPing = phase === 'ping';
+  const displayValue = isPing ? ping : value;
+  const showValue = displayValue > 0;
+  const unit = isPing ? 'ms' : 'Mbps';
   const showArc = value > 0 && (phase === 'download' || phase === 'upload' || phase === 'done');
   const showPulse = phase === 'ping';
 
@@ -109,7 +113,7 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
           fontSize="36"
           fontWeight="bold"
         >
-          {showValue ? value.toFixed(1) : '—'}
+          {showValue ? displayValue.toFixed(1) : '—'}
         </text>
         <text
           x={center}
@@ -118,7 +122,7 @@ export function SpeedGauge({ value, max = 100, label, phase = 'idle' }: SpeedGau
           className="fill-muted-foreground"
           fontSize="14"
         >
-          Mbps
+          {unit}
         </text>
         {/* Label — truncate long server names */}
         <text
