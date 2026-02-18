@@ -22,7 +22,7 @@ async function proxyRequest(
   const targetUrl = `${agentUrl}${targetPath}${url.search}`;
 
   // Check if this is an SSE request
-  const isSSE = path === '/events';
+  const isSSE = path === '/events' || path === '/nettest/speedtest';
 
   console.log(`[Proxy] ${method} ${targetUrl} (SSE: ${isSSE}, API key: ${agentApiKey ? 'set' : 'not set'})`);
 
