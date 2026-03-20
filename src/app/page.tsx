@@ -355,25 +355,27 @@ export default function Dashboard() {
         {/* Main content */}
         <div className="grid lg:grid-cols-4 gap-6">
           {/* Devices section */}
-          <div className="lg:col-span-3 min-w-0">
-            <Tabs defaultValue="all" className="space-y-4">
-              <TabsList className="w-full max-w-full overflow-x-auto">
-                <TabsTrigger value="all" className="flex-none">Connected ({stats.total})</TabsTrigger>
-                <TabsTrigger value="wifi" className="flex-none">WiFi ({stats.wifi})</TabsTrigger>
-                <TabsTrigger value="ethernet" className="flex-none">
-                  Ethernet ({stats.ethernet})
-                </TabsTrigger>
-                {stats.disconnected > 0 && (
-                  <TabsTrigger value="disconnected" className="flex-none">
-                    Offline ({stats.disconnected})
+          <div className="lg:col-span-3 min-w-0 overflow-hidden">
+            <Tabs defaultValue="all" className="space-y-4 min-w-0">
+              <div className="w-full overflow-x-auto">
+                <TabsList className="inline-flex w-auto min-w-full">
+                  <TabsTrigger value="all" className="flex-none">Connected ({stats.total})</TabsTrigger>
+                  <TabsTrigger value="wifi" className="flex-none">WiFi ({stats.wifi})</TabsTrigger>
+                  <TabsTrigger value="ethernet" className="flex-none">
+                    Ethernet ({stats.ethernet})
                   </TabsTrigger>
-                )}
-                {stats.blocked > 0 && (
-                  <TabsTrigger value="blocked" className="flex-none">
-                    Blocked ({stats.blocked})
-                  </TabsTrigger>
-                )}
-              </TabsList>
+                  {stats.disconnected > 0 && (
+                    <TabsTrigger value="disconnected" className="flex-none">
+                      Offline ({stats.disconnected})
+                    </TabsTrigger>
+                  )}
+                  {stats.blocked > 0 && (
+                    <TabsTrigger value="blocked" className="flex-none">
+                      Blocked ({stats.blocked})
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+              </div>
 
               <TabsContent value="all" className="space-y-4">
                 {isLoading && devices.length === 0 ? (
