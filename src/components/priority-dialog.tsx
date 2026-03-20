@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Zap } from 'lucide-react';
 import {
   Dialog,
@@ -44,6 +44,13 @@ export function PriorityDialog({
   const [priority, setPriority] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Initialize slider with current device priority when dialog opens
+  useEffect(() => {
+    if (open && device) {
+      setPriority(device.priority > 0 && device.priority < 8 ? device.priority : 1);
+    }
+  }, [open, device]);
+
   const handleSetPriority = async () => {
     setIsLoading(true);
     try {
@@ -74,6 +81,9 @@ export function PriorityDialog({
           </DialogTitle>
           <DialogDescription>
             Set network priority for {device.hostname || device.ip}. Lower numbers mean higher priority.
+            {device.priority > 0 && device.priority < 8 && (
+              <> Currently set to <strong>{device.priority}</strong> ({priorityLabels[device.priority]}).</>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-6 py-4">

@@ -219,8 +219,8 @@ export function DeviceCard({
             ) : null}
             {onBoost && (
               <DropdownMenuItem onClick={() => onBoost(device.mac)}>
-                <Zap className="mr-2 h-4 w-4 text-yellow-500" />
-                Boost Priority
+                <Zap className={cn("mr-2 h-4 w-4", device.priority > 0 && device.priority < 8 ? "text-orange-500" : "text-yellow-500")} />
+                {device.priority > 0 && device.priority < 8 ? `Priority: ${device.priority}/8` : 'Boost Priority'}
               </DropdownMenuItem>
             )}
             {isWifi && onDisconnect && (
@@ -385,6 +385,12 @@ export function DeviceCard({
             {device.isExempt && (
               <Badge variant="outline" className="text-xs text-emerald-500 border-emerald-500">
                 Exempt
+              </Badge>
+            )}
+            {device.priority > 0 && device.priority < 8 && (
+              <Badge variant="outline" className="text-xs text-yellow-500 border-yellow-500">
+                <Zap className="h-3 w-3 mr-0.5" />
+                Priority {device.priority}
               </Badge>
             )}
             {device.hasBWLimit && !device.isExempt && (

@@ -31,6 +31,8 @@ export interface Device {
   // Default bandwidth tracking
   isDefaultLimit: boolean;
   isExempt: boolean;
+  // Priority (1=highest, 8=default/normal, 0=not set)
+  priority: number;
 }
 
 export interface SystemInfo {
