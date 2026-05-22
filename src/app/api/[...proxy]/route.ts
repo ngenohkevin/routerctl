@@ -10,31 +10,29 @@ async function proxyRequest(
   request: NextRequest,
   method: string
 ): Promise<Response> {
-  // Read env vars at request time to ensure they're loaded
   const agentUrl = process.env.AGENT_URL || 'http://localhost:8090';
-  const agentApiKey = process.env.AGENT_API_KEY || '';
 
   const url = new URL(request.url);
-  // Remove the /api prefix from Next.js route
   const path = url.pathname.replace('/api', '');
-  // Health endpoint is at root, all others under /api on the agent
-  const targetPath = path === '/health' ? '/health' : `/api${path}`;
+  // Health and auth endpoints are at root; everything else lives under /api on the agent.
+  const isAuth = path.startsWith('/auth/');
+  const targetPath = path === '/health' || isAuth ? path : `/api${path}`;
   const targetUrl = `${agentUrl}${targetPath}${url.search}`;
 
-  // Check if this is an SSE request
-  const isSSE = path === '/events' || path === '/nettest/speedtest';
-
-  console.log(`[Proxy] ${method} ${targetUrl} (SSE: ${isSSE}, API key: ${agentApiKey ? 'set' : 'not set'})`);
+  const isSSE = path === '/events' || path === '/events/poll' || path === '/nettest/speedtest';
 
   const headers: Record<string, string> = {
     'Accept': isSSE ? 'text/event-stream' : 'application/json',
   };
 
-  if (agentApiKey) {
-    headers['Authorization'] = `Bearer ${agentApiKey}`;
+  // Forward the user's Authorization header — never inject a shared service key.
+  // EventSource clients can't set headers; they pass the JWT via ?token= which the
+  // agent's middleware also accepts (see middleware.go AuthMiddleware).
+  const authHeader = request.headers.get('authorization');
+  if (authHeader) {
+    headers['Authorization'] = authHeader;
   }
 
-  // Forward relevant headers from original request
   const contentType = request.headers.get('content-type');
   if (contentType) {
     headers['Content-Type'] = contentType;

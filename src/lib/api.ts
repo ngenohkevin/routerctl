@@ -320,8 +320,12 @@ export const api = {
     onSystem: (system: SystemResponse['system']) => void,
     onError: (error: Error) => void
   ): () => void {
-    const apiKey = process.env.NEXT_PUBLIC_AGENT_API_KEY;
     const url = new URL(`${API_BASE}/events`, window.location.origin);
+    // EventSource can't set headers; the agent's middleware also accepts ?token=.
+    const token = getToken();
+    if (token) {
+      url.searchParams.set('token', token);
+    }
 
     const eventSource = new EventSource(url.toString());
 
