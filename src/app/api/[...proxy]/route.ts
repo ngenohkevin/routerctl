@@ -83,16 +83,28 @@ async function proxyRequest(
       });
     }
 
-    // Regular JSON response
-    const data = await response.json();
+    // Pass the upstream status code through verbatim — collapsing every error
+    // into 500 used to break the session-expired flow in fetchApi (which only
+    // redirects on 401). Also handle empty/non-JSON bodies, which the agent
+    // returns for some mutation responses; `response.json()` on an empty body
+    // throws and falls into the catch, dropping the real status.
+    const text = await response.text();
+    let parsed: unknown = {};
+    if (text) {
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = { raw: text };
+      }
+    }
 
-    return NextResponse.json(data, {
+    return NextResponse.json(parsed, {
       status: response.status,
+      headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
     console.error('Proxy error:', error);
 
-    // Check if it's a connection error
     if (error instanceof TypeError && error.message.includes('fetch')) {
       return NextResponse.json(
         { error: 'Agent is not reachable. Make sure the agent is running on your Mac.' },
@@ -102,7 +114,7 @@ async function proxyRequest(
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Proxy error' },
-      { status: 500 }
+      { status: 502 }
     );
   }
 }

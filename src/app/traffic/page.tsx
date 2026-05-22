@@ -27,8 +27,8 @@ export default function TrafficPage() {
     }
   }, [router]);
 
-  const fetchData = async () => {
-    setIsLoading(true);
+  const fetchData = async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
     try {
       const [queueRes, trafficRes, healthRes] = await Promise.all([
         api.getQueueStats().catch(() => ({ stats: [] })),
@@ -41,16 +41,18 @@ export default function TrafficPage() {
     } catch (error) {
       toast.error('Failed to fetch traffic data');
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(true);
 
-    // Auto-refresh every 10 seconds
-    const interval = setInterval(fetchData, 10000);
+    // Auto-refresh every 10 seconds without re-triggering the loading skeleton
+    // (otherwise chart axes reset and table rows flash every tick).
+    const interval = setInterval(() => fetchData(false), 10000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Calculate totals
@@ -96,7 +98,7 @@ export default function TrafficPage() {
           </div>
           <div className="flex items-center gap-2">
             <AgentStatus health={health} isConnected={!!health?.routerConnected} />
-            <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3" onClick={fetchData}>
+            <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3" onClick={() => fetchData(true)}>
               <RefreshCw className="h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">Refresh</span>
             </Button>

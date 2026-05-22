@@ -57,8 +57,10 @@ export function DnsSettingsDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Filter out empty servers
-    const validServers = servers.filter((s) => s.trim() !== '');
+    // Only forward IPs that are non-empty AND validly formatted — the submit
+    // filter used to accept anything non-empty, sending malformed values to the
+    // agent and surfacing a generic "Failed to update DNS settings" toast.
+    const validServers = servers.filter((s) => s.trim() !== '' && isValidIp(s));
     if (validServers.length === 0) {
       return;
     }

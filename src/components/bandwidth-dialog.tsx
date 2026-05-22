@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,19 @@ export function BandwidthDialog({
   const [downloadSpeed, setDownloadSpeed] = useState(5000000);
   const [uploadSpeed, setUploadSpeed] = useState(5000000);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Hydrate sliders from the device whenever the dialog is opened for a new
+  // device, so the previous device's selection doesn't bleed over.
+  useEffect(() => {
+    if (!open || !device) return;
+    const parseLimit = (raw?: string) => {
+      if (!raw) return 5000000;
+      const n = parseInt(raw, 10);
+      return Number.isFinite(n) && n > 0 ? n : 5000000;
+    };
+    setDownloadSpeed(parseLimit(device.downloadLimit));
+    setUploadSpeed(parseLimit(device.uploadLimit));
+  }, [open, device]);
 
   const formatSpeed = (speed: number) => {
     if (speed >= 1000000) {

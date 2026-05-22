@@ -113,8 +113,11 @@ export default function SpeedTestPage() {
         }
         setPhase('download');
         setGaugeLabel('Testing download...');
+        // Capture every event's speed (including the final 0 from done),
+        // so the download card never displays 0 Mbps just because the last
+        // tick was a phase boundary.
+        setGaugeValue(ev.speed);
         if (ev.speed > 0) {
-          setGaugeValue(ev.speed);
           lastDownload = ev.speed;
         }
       } else if (ev.phase === 'upload') {

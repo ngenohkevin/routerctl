@@ -48,7 +48,11 @@ export function SchedulerDialog({ onSchedule }: SchedulerDialogProps) {
     try {
       // Convert HH:MM to HH:MM:SS format
       const startTime = `${time}:00`;
-      await onSchedule(name.trim(), startTime, interval);
+      // The "once" sentinel is the dialog's internal convention; the agent's
+      // scheduler expects an empty interval for one-shot tasks. Convert here
+      // so callers don't have to know about the sentinel.
+      const apiInterval = interval === 'once' ? '' : interval;
+      await onSchedule(name.trim(), startTime, apiInterval);
       setOpen(false);
       // Reset form
       setName('');

@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import type { Device, SystemInfo, HealthStatus } from '@/types';
 import { api } from '@/lib/api';
 
+// Read the JWT directly (mirrors api.ts's getToken) so SSE can include
+// ?token= in its URL — EventSource can't set Authorization headers.
+function getJWT(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('routerctl_token');
+}
+
 interface DevicesState {
   devices: Device[];
   systemInfo: SystemInfo | null;
@@ -118,16 +125,16 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
     }
   },
 
+  // Optimistic boolean flips for limit/exempt/priority transitions are too
+  // entangled with server-side reconciliation (default-bandwidth on/off,
+  // mutual exclusion between exempt and limit, MAC randomization) to model
+  // correctly client-side. After the mutation lands, refetch authoritative
+  // state — the brief refetch latency is far less confusing than a UI that
+  // lies for two seconds and then snaps to the truth on the next SSE tick.
   setBandwidthLimit: async (mac: string, upload: string, download: string) => {
     try {
       await api.setBandwidthLimit(mac, upload, download);
-      set((state) => ({
-        devices: state.devices.map((d) =>
-          d.mac === mac
-            ? { ...d, hasBWLimit: true, uploadLimit: upload, downloadLimit: download }
-            : d
-        ),
-      }));
+      await get().fetchDevices();
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to set bandwidth limit',
@@ -139,13 +146,7 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   removeBandwidthLimit: async (mac: string) => {
     try {
       await api.removeBandwidthLimit(mac);
-      set((state) => ({
-        devices: state.devices.map((d) =>
-          d.mac === mac
-            ? { ...d, hasBWLimit: false, uploadLimit: undefined, downloadLimit: undefined, isDefaultLimit: false }
-            : d
-        ),
-      }));
+      await get().fetchDevices();
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to remove bandwidth limit',
@@ -157,13 +158,7 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   exemptDevice: async (mac: string) => {
     try {
       await api.exemptDevice(mac);
-      set((state) => ({
-        devices: state.devices.map((d) =>
-          d.mac === mac
-            ? { ...d, isExempt: true, isDefaultLimit: false, hasBWLimit: false }
-            : d
-        ),
-      }));
+      await get().fetchDevices();
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to exempt device',
@@ -175,13 +170,7 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   removeExemption: async (mac: string) => {
     try {
       await api.removeExemption(mac);
-      set((state) => ({
-        devices: state.devices.map((d) =>
-          d.mac === mac
-            ? { ...d, isExempt: false, isDefaultLimit: true, hasBWLimit: true }
-            : d
-        ),
-      }));
+      await get().fetchDevices();
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to remove exemption',
@@ -193,8 +182,7 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   disconnectDevice: async (mac: string) => {
     try {
       await api.disconnectDevice(mac);
-      // Refresh devices list after disconnecting
-      get().fetchDevices();
+      await get().fetchDevices();
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to disconnect device',
@@ -222,8 +210,7 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   setDevicePriority: async (mac: string, priority: number) => {
     try {
       await api.setDevicePriority(mac, priority);
-      // Refresh to get updated device data
-      get().fetchDevices();
+      await get().fetchDevices();
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to set device priority',
@@ -235,7 +222,7 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   removeDevicePriority: async (mac: string) => {
     try {
       await api.removeDevicePriority(mac);
-      get().fetchDevices();
+      await get().fetchDevices();
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to remove device priority',
@@ -304,7 +291,11 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
       }
 
       try {
-        eventSource = new EventSource('/api/events');
+        // EventSource can't send Authorization headers; the agent's auth
+        // middleware also accepts ?token=, which the proxy forwards verbatim.
+        const token = getJWT();
+        const url = token ? `/api/events?token=${encodeURIComponent(token)}` : '/api/events';
+        eventSource = new EventSource(url);
 
         eventSource.onopen = () => {
           setConnected(true);
