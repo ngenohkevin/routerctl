@@ -272,6 +272,35 @@ export interface LatencyTarget {
   error?: string;
 }
 
+// Streaming Quality Test
+export interface StreamingCDN {
+  name: string;
+  host: string;
+  pingMs: number;
+  reachable: boolean;
+}
+
+export interface StreamingQualityVerdict {
+  quality: string;
+  requiredMb: number;
+  streamable: boolean;
+  reason: string;
+}
+
+export interface StreamingTestResult {
+  sustainedDownload: number;  // Mbps averaged over the whole window
+  peakDownload: number;       // best 1s window in Mbps
+  idleLatency: number;        // ms
+  loadedLatency: number;      // ms
+  worstLatency: number;       // ms (p95 under load)
+  latencyRise: number;        // ms, loaded - idle
+  bufferbloatGrade: string;   // A+ / A / B / C / D / F / —
+  cdns: StreamingCDN[];
+  qualities: StreamingQualityVerdict[];
+  timestamp: string;
+  durationSeconds: number;
+}
+
 export interface LatencyResult {
   timestamp: string;
   targets: LatencyTarget[];

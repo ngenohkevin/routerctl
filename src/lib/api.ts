@@ -21,6 +21,8 @@ import type {
   NetSpeedTestResult,
   SpeedTestServer,
   LatencyResult,
+  StreamingTestResult,
+  StreamingCDN,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -521,6 +523,70 @@ export const api = {
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           onProgress({ phase: 'error', speed: 0, ping: 0, jitter: 0, server: {} as SpeedTestServer, error: 'Connection lost' });
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  },
+
+  // Streaming Quality Test (runs from Pi against Cloudflare + CDN probes)
+  runStreamingTest(
+    onProgress: (event: {
+      phase: string;
+      speed?: number;
+      latency?: number;
+      message?: string;
+      cdn?: StreamingCDN;
+      result?: StreamingTestResult;
+      error?: string;
+    }) => void
+  ): () => void {
+    const token = getToken();
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const headers: Record<string, string> = { Accept: 'text/event-stream' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE}/nettest/streaming`, {
+          headers,
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+
+        if (!response.ok || !response.body) {
+          const err = await response.json().catch(() => ({ error: 'Streaming test failed' }));
+          onProgress({ phase: 'error', error: err.error });
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let dataLine = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (line.startsWith('data:')) {
+              dataLine = line.slice(5).trim();
+            } else if (line === '' && dataLine) {
+              try {
+                onProgress(JSON.parse(dataLine));
+              } catch {}
+              dataLine = '';
+            }
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          onProgress({ phase: 'error', error: 'Connection lost' });
         }
       }
     })();

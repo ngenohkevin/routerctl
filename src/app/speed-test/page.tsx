@@ -14,7 +14,7 @@ import { SpeedGauge } from '@/components/speed-gauge';
 import { SpeedResultCards } from '@/components/speed-result-cards';
 import { LatencyTable } from '@/components/latency-table';
 import { SpeedHistoryChart } from '@/components/speed-history-chart';
-import { StreamingCalculator } from '@/components/streaming-calculator';
+import { StreamingTest } from '@/components/streaming-test';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
@@ -360,7 +360,7 @@ export default function SpeedTestPage() {
 
           {/* Streaming Tab */}
           <TabsContent value="streaming" className="space-y-6">
-            <StreamingCalculator downloadSpeed={lastResult?.download ?? null} />
+            <StreamingTest lastDownloadFromSpeedTest={lastResult?.download ?? null} />
           </TabsContent>
         </Tabs>
       </div>
