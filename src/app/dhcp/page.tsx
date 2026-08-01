@@ -101,7 +101,7 @@ export default function DHCPPage() {
       ]);
       setLeases(leasesRes.leases || []);
       setHealth(healthRes);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch DHCP leases');
     } finally {
       setIsLoading(false);
@@ -145,7 +145,7 @@ export default function DHCPPage() {
       await api.makeLeaseStatic(mac);
       toast.success('Lease converted to static');
       fetchData(false);
-    } catch (error) {
+    } catch {
       toast.error('Failed to make lease static');
     }
   };
@@ -158,7 +158,7 @@ export default function DHCPPage() {
       setDeleteDialogOpen(false);
       setSelectedLease(null);
       fetchData(false);
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete lease');
     }
   };
@@ -179,8 +179,8 @@ export default function DHCPPage() {
       setAddDialogOpen(false);
       setFormData({ mac: '', address: '', hostname: '', comment: '' });
       fetchData(false);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create lease');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create lease');
     }
   };
 
@@ -200,7 +200,7 @@ export default function DHCPPage() {
       setSelectedLease(null);
       setFormData({ mac: '', address: '', hostname: '', comment: '' });
       fetchData(false);
-    } catch (error) {
+    } catch {
       toast.error('Failed to update lease');
     }
   };
@@ -215,7 +215,7 @@ export default function DHCPPage() {
         toast.success('Lease disabled');
       }
       fetchData(false);
-    } catch (error) {
+    } catch {
       toast.error('Failed to toggle lease status');
     }
   };

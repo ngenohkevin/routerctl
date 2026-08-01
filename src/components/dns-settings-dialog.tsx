@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Globe, Loader2, X, Plus } from 'lucide-react';
+import { Globe, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -69,7 +69,7 @@ export function DnsSettingsDialog({
     try {
       await onSave(validServers, allowRemoteRequests);
       setOpen(false);
-    } catch (error) {
+    } catch {
       // Error handling done in parent
     } finally {
       setIsLoading(false);

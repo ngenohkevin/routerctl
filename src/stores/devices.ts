@@ -81,7 +81,7 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
     try {
       const response = await api.getHealth();
       set({ health: response });
-    } catch (error) {
+    } catch {
       set({
         health: {
           status: 'offline',

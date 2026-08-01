@@ -19,7 +19,11 @@ async function proxyRequest(
   const targetPath = path === '/health' || isAuth ? path : `/api${path}`;
   const targetUrl = `${agentUrl}${targetPath}${url.search}`;
 
-  const isSSE = path === '/events' || path === '/events/poll' || path === '/nettest/speedtest';
+  const isSSE =
+    path === '/events' ||
+    path === '/events/poll' ||
+    path === '/nettest/speedtest' ||
+    path === '/nettest/streaming';
 
   const headers: Record<string, string> = {
     'Accept': isSSE ? 'text/event-stream' : 'application/json',

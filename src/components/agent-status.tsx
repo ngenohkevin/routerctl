@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, AlertCircle, CheckCircle2, Radio } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Radio } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { HealthStatus } from '@/types';
 import { cn } from '@/lib/utils';

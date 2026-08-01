@@ -1,13 +1,14 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { Play, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Play, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp, Activity, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StreamingCalculator } from '@/components/streaming-calculator';
 import { api } from '@/lib/api';
+import { toast } from 'sonner';
 import type { StreamingTestResult, StreamingCDN } from '@/types';
 
 type Phase = 'idle' | 'cdn' | 'idle-latency' | 'download' | 'bufferbloat' | 'done' | 'error';
@@ -53,9 +54,28 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
   const [result, setResult] = useState<StreamingTestResult | null>(null);
   const [showCalculator, setShowCalculator] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<StreamingTestResult[]>([]);
   const cancelRef = useRef<(() => void) | null>(null);
 
   const isRunning = phase !== 'idle' && phase !== 'done' && phase !== 'error';
+
+  const fetchHistory = () => {
+    api.getStreamingHistory(20).then((res) => setHistory(res.results || [])).catch(() => setHistory([]));
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const clearHistory = async () => {
+    try {
+      await api.clearStreamingHistory();
+      setHistory([]);
+      toast.success('Streaming history cleared');
+    } catch {
+      toast.error('Failed to clear streaming history');
+    }
+  };
 
   function startTest() {
     cancelRef.current?.();
@@ -89,6 +109,7 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
       if (ev.phase === 'done') {
         setPhase('done');
         if (ev.result) setResult(ev.result);
+        fetchHistory();
         return;
       }
       if (ev.phase === 'error') {
@@ -267,6 +288,54 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
             </CardContent>
           </Card>
         </>
+      )}
+
+      {/* Recent streaming tests — persisted history */}
+      {history.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-base">Recent tests</CardTitle>
+              <CardDescription>{history.length} saved — bufferbloat grade and sustained speed over time</CardDescription>
+            </div>
+            <Button variant="destructive" size="sm" className="gap-1" onClick={clearHistory}>
+              <Trash2 className="h-3.5 w-3.5" />
+              Clear
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Grade</TableHead>
+                  <TableHead className="text-right">Sustained</TableHead>
+                  <TableHead className="text-right hidden sm:table-cell">Latency rise</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {history.map((h) => (
+                  <TableRow key={h.timestamp}>
+                    <TableCell className="text-xs">
+                      {new Date(h.timestamp).toLocaleString(undefined, {
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center justify-center min-w-8 h-6 px-1.5 rounded border text-xs font-bold ${gradeColour(h.bufferbloatGrade)}`}>
+                        {h.bufferbloatGrade}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">{h.sustainedDownload.toFixed(1)} Mbps</TableCell>
+                    <TableCell className="text-right font-mono text-sm hidden sm:table-cell">
+                      {h.latencyRise > 0 ? `+${h.latencyRise.toFixed(0)} ms` : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {/* Collapsible quick calculator — preserved from the old tab */}

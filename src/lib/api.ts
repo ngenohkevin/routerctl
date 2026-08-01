@@ -14,7 +14,6 @@ import type {
   SpeedTestResult,
   TrafficStats,
   QueueStats,
-  LogEntry,
   LogsResponse,
   DHCPLease,
   DHCPLeasesResponse,
@@ -28,6 +27,7 @@ import type {
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
 const AUTH_BASE = process.env.NEXT_PUBLIC_AGENT_URL?.replace('/api', '/auth') || '/api/auth';
 const TOKEN_KEY = 'routerctl_token';
+const EXPIRES_KEY = 'routerctl_token_expires'; // Unix seconds
 
 // Helper to get token from localStorage (client-side only)
 function getToken(): string | null {
@@ -35,27 +35,47 @@ function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-// Helper to set token in localStorage
-export function setToken(token: string): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(TOKEN_KEY, token);
+// Helper to set token in localStorage. expiresAt is the token's Unix-seconds
+// expiry (from the login response) so the client can log out proactively
+// instead of only discovering expiry via a failed request.
+export function setToken(token: string, expiresAt?: number): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(TOKEN_KEY, token);
+  if (expiresAt) {
+    localStorage.setItem(EXPIRES_KEY, String(expiresAt));
   }
 }
 
 // Helper to remove token from localStorage
 export function removeToken(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(TOKEN_KEY);
-  }
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(EXPIRES_KEY);
 }
 
-// Check if user is authenticated
+// Build a same-origin login URL that remembers where the user was, so a
+// mid-session expiry returns them to the page they were on after re-login.
+// Guards against open-redirects: only same-origin ("/…", not "//…") paths.
+function loginUrlWithReturn(): string {
+  if (typeof window === 'undefined') return '/login';
+  const here = window.location.pathname + window.location.search;
+  if (window.location.pathname === '/login' || here.startsWith('//')) return '/login';
+  return `/login?next=${encodeURIComponent(here)}`;
+}
+
+// Check if user is authenticated. Returns false (and clears the stale token)
+// once the known expiry has passed — a 30s skew avoids racing the server's
+// own exp check. Tokens stored before expiry tracking existed are treated as
+// valid; the 401 path still catches those.
 export function isAuthenticated(): boolean {
-  return !!getToken();
-}
-
-interface ApiOptions {
-  headers?: Record<string, string>;
+  const token = getToken();
+  if (!token) return false;
+  const exp = Number(localStorage.getItem(EXPIRES_KEY));
+  if (exp && Date.now() / 1000 > exp - 30) {
+    removeToken();
+    return false;
+  }
+  return true;
 }
 
 async function fetchApi<T>(
@@ -81,7 +101,7 @@ async function fetchApi<T>(
   if (response.status === 401) {
     removeToken();
     if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-      window.location.href = '/login';
+      window.location.href = loginUrlWithReturn();
     }
     throw new Error('Session expired. Please login again.');
   }
@@ -115,7 +135,7 @@ export const api = {
     }
 
     const data = await response.json();
-    setToken(data.token);
+    setToken(data.token, data.expiresAt);
     return data;
   },
 
@@ -612,5 +632,14 @@ export const api = {
 
   async clearSpeedTestHistory(): Promise<{ message: string }> {
     return fetchApi<{ message: string }>('/nettest/history', { method: 'DELETE' });
+  },
+
+  async getStreamingHistory(limit?: number): Promise<{ results: StreamingTestResult[]; count: number }> {
+    const params = limit ? `?limit=${limit}` : '';
+    return fetchApi<{ results: StreamingTestResult[]; count: number }>(`/nettest/streaming/history${params}`);
+  },
+
+  async clearStreamingHistory(): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/nettest/streaming/history', { method: 'DELETE' });
   },
 };

@@ -16,10 +16,20 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Redirect to dashboard if already authenticated
+  // Return the user to the page they were on before the session expired.
+  // Read from window.location (not useSearchParams) to avoid the Suspense
+  // boundary Next requires for that hook on an otherwise-static page.
+  const nextPath = (): string => {
+    if (typeof window === 'undefined') return '/';
+    const next = new URLSearchParams(window.location.search).get('next');
+    // Same-origin paths only ("/…", not "//…") to avoid open redirects.
+    return next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+  };
+
+  // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated()) {
-      router.push('/');
+      router.push(nextPath());
     }
   }, [router]);
 
@@ -30,7 +40,7 @@ export default function LoginPage() {
 
     try {
       await api.login(username, password);
-      router.push('/');
+      router.push(nextPath());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

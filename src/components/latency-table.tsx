@@ -18,13 +18,6 @@ function pingColor(ms: number): string {
   return 'text-red-500';
 }
 
-function pingBadge(ms: number): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (ms <= 0) return 'secondary';
-  if (ms < 20) return 'default';
-  if (ms < 100) return 'outline';
-  return 'destructive';
-}
-
 export function LatencyTable({ targets, isLoading }: LatencyTableProps) {
   if (isLoading) {
     return (

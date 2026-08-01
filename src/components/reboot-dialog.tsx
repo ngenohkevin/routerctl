@@ -29,7 +29,7 @@ export function RebootDialog({ onReboot, disabled }: RebootDialogProps) {
     try {
       await onReboot();
       setOpen(false);
-    } catch (error) {
+    } catch {
       // Error handling is done in the parent component
     } finally {
       setIsRebooting(false);

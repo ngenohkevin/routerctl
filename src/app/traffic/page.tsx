@@ -38,7 +38,7 @@ export default function TrafficPage() {
       setQueueStats(queueRes.stats || []);
       setTrafficStats(trafficRes.stats || []);
       setHealth(healthRes);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch traffic data');
     } finally {
       if (showLoading) setIsLoading(false);
@@ -52,7 +52,6 @@ export default function TrafficPage() {
     // (otherwise chart axes reset and table rows flash every tick).
     const interval = setInterval(() => fetchData(false), 10000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Calculate totals

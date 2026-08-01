@@ -13,7 +13,6 @@ import {
   SignalMedium,
   SignalLow,
   Clock,
-  Globe,
   Zap,
   Power,
   Edit3,

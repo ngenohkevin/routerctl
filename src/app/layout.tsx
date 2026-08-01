@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { SwRegister } from '@/components/sw-register';
@@ -18,12 +18,20 @@ export const metadata: Metadata = {
   title: 'RouterCtl - Router Management Dashboard',
   description: 'Manage your MikroTik router - devices, bandwidth, and more',
   manifest: '/manifest.json',
-  themeColor: '#09090b',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'RouterCtl',
   },
+};
+
+// Next 16 requires themeColor/viewport in a dedicated viewport export;
+// keeping it in `metadata` silently drops it.
+export const viewport: Viewport = {
+  themeColor: '#09090b',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -34,7 +42,6 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>

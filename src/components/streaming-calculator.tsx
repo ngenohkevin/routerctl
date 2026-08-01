@@ -95,7 +95,7 @@ export function StreamingCalculator({ downloadSpeed }: StreamingCalculatorProps)
                 <span className="font-mono font-bold text-lg">{requiredMbps.toFixed(1)} Mbps</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Required speed</span>
+                <span className="text-sm text-muted-foreground">In MB/s</span>
                 <span className="font-mono text-sm">{(requiredMbps / 8).toFixed(2)} MB/s</span>
               </div>
               {downloadSpeed !== null && (

@@ -4,11 +4,14 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Gauge, ArrowLeft, RefreshCw, Play, Trash2, Radio, Tv,
+  Gauge, ArrowLeft, RefreshCw, Play, Trash2, Radio,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { AgentStatus } from '@/components/agent-status';
 import { SpeedGauge } from '@/components/speed-gauge';
 import { SpeedResultCards } from '@/components/speed-result-cards';
@@ -18,7 +21,7 @@ import { StreamingTest } from '@/components/streaming-test';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
-import type { HealthStatus, NetSpeedTestResult, LatencyTarget } from '@/types';
+import type { HealthStatus, NetSpeedTestResult, LatencyTarget, SpeedTestServer } from '@/types';
 
 type SpeedPhase = 'idle' | 'ping' | 'download' | 'upload' | 'done';
 
@@ -47,6 +50,11 @@ export default function SpeedTestPage() {
   const [history, setHistory] = useState<NetSpeedTestResult[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
+  // Server selection ('' = auto-pick nearest by latency, the backend default)
+  const [servers, setServers] = useState<SpeedTestServer[]>([]);
+  const [selectedServerID, setSelectedServerID] = useState<string>('');
+  const [serversLoading, setServersLoading] = useState(false);
+
   const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -58,7 +66,21 @@ export default function SpeedTestPage() {
   useEffect(() => {
     api.getHealth().then(setHealth).catch(() => null);
     fetchHistory();
+    loadServers();
   }, []);
+
+  const loadServers = async () => {
+    setServersLoading(true);
+    try {
+      const res = await api.listSpeedTestServers();
+      setServers(res.servers || []);
+    } catch {
+      // Non-fatal — auto-pick still works without an explicit list.
+      setServers([]);
+    } finally {
+      setServersLoading(false);
+    }
+  };
 
   // Cleanup SSE on unmount
   useEffect(() => {
@@ -97,7 +119,7 @@ export default function SpeedTestPage() {
     let downloadDone = false;
     let lastDownload = 0;
 
-    const cleanup = api.runNetSpeedTest(undefined, (ev) => {
+    const cleanup = api.runNetSpeedTest(selectedServerID || undefined, (ev) => {
       if (ev.phase === 'ping') {
         setPhase('ping');
         if (ev.ping > 0) {
@@ -221,24 +243,48 @@ export default function SpeedTestPage() {
                   phase={phase}
                   ping={gaugePing}
                 />
-                <Button
-                  size="lg"
-                  onClick={startSpeedTest}
-                  disabled={isRunning}
-                  className="gap-2"
-                >
-                  {isRunning ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      Testing...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4" />
-                      Run Speed Test
-                    </>
-                  )}
-                </Button>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                  <Select
+                    value={selectedServerID || 'auto'}
+                    onValueChange={(v) => setSelectedServerID(v === 'auto' ? '' : v)}
+                    disabled={isRunning}
+                  >
+                    <SelectTrigger className="w-full sm:w-72" aria-label="Speed test server">
+                      <SelectValue placeholder="Auto (nearest server)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        Auto (nearest server)
+                      </SelectItem>
+                      {servers.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.sponsor} — {s.name}, {s.country} ({s.distance} km)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="lg"
+                    onClick={startSpeedTest}
+                    disabled={isRunning}
+                    className="gap-2"
+                  >
+                    {isRunning ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4" />
+                        Run Speed Test
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {serversLoading && (
+                  <p className="text-xs text-muted-foreground">Loading nearby servers…</p>
+                )}
                 {lastResult && (
                   <p className="text-xs text-muted-foreground">
                     Server: {lastResult.server.sponsor} ({lastResult.server.name}, {lastResult.server.country})

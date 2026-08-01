@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -86,7 +86,10 @@ export default function LogsPage() {
     }
   }, [router]);
 
-  const fetchData = async (showLoading = true) => {
+  // useCallback keyed on the filters that affect the request, so the effects
+  // below can depend on fetchData directly (satisfies exhaustive-deps without
+  // re-creating the fetch on every render).
+  const fetchData = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
     setIsRefreshing(true);
     try {
@@ -99,17 +102,17 @@ export default function LogsPage() {
       setLogs(logsRes.logs || []);
       setTopics(topicsRes.topics || []);
       setHealth(healthRes);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch logs');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [selectedTopic, limit]);
 
   useEffect(() => {
     fetchData();
-  }, [selectedTopic, limit]);
+  }, [fetchData]);
 
   // Auto-refresh
   useEffect(() => {
@@ -120,7 +123,7 @@ export default function LogsPage() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [autoRefresh, selectedTopic, limit]);
+  }, [autoRefresh, fetchData]);
 
   // Filter logs by search query
   const filteredLogs = useMemo(() => {

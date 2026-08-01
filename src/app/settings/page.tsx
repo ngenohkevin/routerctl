@@ -51,7 +51,7 @@ export default function SettingsPage() {
         setDnsSettings(dnsRes.settings);
       }
       setDhcpNetworks(dhcpRes.networks || []);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch settings data');
     } finally {
       setIsLoading(false);
@@ -100,7 +100,7 @@ export default function SettingsPage() {
     try {
       await api.flushDnsCache();
       toast.success('DNS cache flushed');
-    } catch (error) {
+    } catch {
       toast.error('Failed to flush DNS cache');
     }
   };

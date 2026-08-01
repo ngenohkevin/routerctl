@@ -64,7 +64,7 @@ export function DhcpDnsDialog({
     try {
       await onSave(network.id, validServers);
       setOpen(false);
-    } catch (error) {
+    } catch {
       // Error handling done in parent
     } finally {
       setIsLoading(false);

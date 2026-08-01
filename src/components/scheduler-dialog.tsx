@@ -58,7 +58,7 @@ export function SchedulerDialog({ onSchedule }: SchedulerDialogProps) {
       setName('');
       setTime('03:00');
       setInterval('1d');
-    } catch (error) {
+    } catch {
       // Error handling is done in the parent component
     } finally {
       setIsLoading(false);
