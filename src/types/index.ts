@@ -249,6 +249,7 @@ export interface NetSpeedTestResult {
   upload: number;   // Mbps
   ping: number;     // ms
   jitter: number;   // ms
+  isp?: string;     // client ISP (from speedtest.net config)
 }
 
 export interface SpeedTestServer {

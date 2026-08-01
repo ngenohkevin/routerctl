@@ -481,6 +481,7 @@ export const api = {
       ping: number;
       jitter: number;
       server: SpeedTestServer;
+      isp?: string;
       result?: NetSpeedTestResult;
       error?: string;
     }) => void

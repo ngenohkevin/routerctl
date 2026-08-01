@@ -41,6 +41,7 @@ export default function SpeedTestPage() {
   const [cardJitter, setCardJitter] = useState<number | null>(null);
   const [cardDownload, setCardDownload] = useState<number | null>(null);
   const [cardUpload, setCardUpload] = useState<number | null>(null);
+  const [isp, setIsp] = useState<string | null>(null);
 
   // Latency state
   const [latencyTargets, setLatencyTargets] = useState<LatencyTarget[]>([]);
@@ -114,12 +115,15 @@ export default function SpeedTestPage() {
     setCardJitter(null);
     setCardDownload(null);
     setCardUpload(null);
+    setIsp(null);
 
     let pingDone = false;
     let downloadDone = false;
     let lastDownload = 0;
 
     const cleanup = api.runNetSpeedTest(selectedServerID || undefined, (ev) => {
+      // ISP is sent from the ping phase onward; latch it as soon as it arrives.
+      if (ev.isp) setIsp(ev.isp);
       if (ev.phase === 'ping') {
         setPhase('ping');
         if (ev.ping > 0) {
@@ -285,11 +289,18 @@ export default function SpeedTestPage() {
                 {serversLoading && (
                   <p className="text-xs text-muted-foreground">Loading nearby servers…</p>
                 )}
-                {lastResult && (
-                  <p className="text-xs text-muted-foreground">
-                    Server: {lastResult.server.sponsor} ({lastResult.server.name}, {lastResult.server.country})
-                    — {lastResult.server.distance} km away
-                  </p>
+                {(isp || lastResult) && (
+                  <div className="text-xs text-muted-foreground text-center space-y-0.5">
+                    {isp && (
+                      <p>ISP: <span className="text-foreground font-medium">{isp}</span></p>
+                    )}
+                    {lastResult && (
+                      <p>
+                        Server: {lastResult.server.sponsor} ({lastResult.server.name}, {lastResult.server.country})
+                        — {lastResult.server.distance} km away
+                      </p>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -366,6 +377,7 @@ export default function SpeedTestPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
+                        <TableHead>ISP</TableHead>
                         <TableHead>Server</TableHead>
                         <TableHead>Download</TableHead>
                         <TableHead>Upload</TableHead>
@@ -382,6 +394,9 @@ export default function SpeedTestPage() {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {r.isp || '—'}
                           </TableCell>
                           <TableCell className="text-xs">
                             {r.server.sponsor}
