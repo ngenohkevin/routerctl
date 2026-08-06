@@ -17,6 +17,10 @@ export interface Device {
   signalStrength?: string;
   txRate?: string;
   rxRate?: string;
+  // Parsed numeric WiFi metrics (agent-side parsing of the raw strings)
+  signalDbm?: number;
+  txMbps?: number;
+  rxMbps?: number;
   // Vendor identification
   vendor?: string;
   deviceType?: string;

@@ -31,8 +31,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { Device } from '@/types';
 import { cn, getSignalQuality, formatBandwidth, formatDuration } from '@/lib/utils';
+import { timeAgo } from '@/components/device-detail-dialog';
 
 // Check if MAC uses randomized/private addressing (2nd hex digit is 2, 6, A, or E)
 function hasRandomizedMAC(mac: string): boolean {
@@ -84,6 +95,7 @@ interface DeviceCardProps {
   onWakeOnLan?: (mac: string) => Promise<void>;
   onExempt?: (mac: string) => Promise<void>;
   onRemoveExemption?: (mac: string) => Promise<void>;
+  onShowDetails?: (mac: string) => void;
 }
 
 export function DeviceCard({
@@ -97,8 +109,10 @@ export function DeviceCard({
   onWakeOnLan,
   onExempt,
   onRemoveExemption,
+  onShowDetails,
 }: DeviceCardProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'block' | 'disconnect' | null>(null);
 
   // WiFi devices have signal strength data, or are mobile devices, or have randomized MACs (typically WiFi)
   const mobileTypes = ['phone', 'tablet', 'mobile', 'watch', 'apple', 'android'];
@@ -182,7 +196,10 @@ export function DeviceCard({
           ) : (
             <Cable className="h-4 w-4 shrink-0 text-green-500" />
           )}
-          <CardTitle className="text-sm font-medium truncate">
+          <CardTitle
+            className={cn('text-sm font-medium truncate', onShowDetails && 'cursor-pointer hover:underline')}
+            onClick={onShowDetails ? () => onShowDetails(device.mac) : undefined}
+          >
             {device.comment || device.hostname || (isWan ? 'Gateway' : (device.deviceModel || device.vendor)) || device.ip}
           </CardTitle>
         </div>
@@ -224,7 +241,7 @@ export function DeviceCard({
             )}
             {isWifi && onDisconnect && (
               <DropdownMenuItem
-                onClick={handleDisconnect}
+                onClick={() => setConfirmAction('disconnect')}
                 disabled={isLoading}
               >
                 <WifiOff className="mr-2 h-4 w-4" />
@@ -247,7 +264,7 @@ export function DeviceCard({
               </DropdownMenuItem>
             ) : (
               <DropdownMenuItem
-                onClick={handleBlock}
+                onClick={() => setConfirmAction('block')}
                 disabled={isLoading}
                 className="text-destructive"
               >
@@ -257,6 +274,34 @@ export function DeviceCard({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        <AlertDialog open={confirmAction !== null} onOpenChange={(open) => !open && setConfirmAction(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {confirmAction === 'block' ? 'Block this device?' : 'Disconnect this device?'}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {confirmAction === 'block'
+                  ? `${device.comment || device.hostname || device.ip} will lose all network access until you unblock it.`
+                  : `${device.comment || device.hostname || device.ip} will be kicked off WiFi. It can reconnect immediately unless you also block it.`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className={confirmAction === 'block' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
+                onClick={() => {
+                  const action = confirmAction;
+                  setConfirmAction(null);
+                  if (action === 'block') void handleBlock();
+                  else if (action === 'disconnect') void handleDisconnect();
+                }}
+              >
+                {confirmAction === 'block' ? 'Block' : 'Disconnect'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardHeader>
       <CardContent>
         <div className="space-y-2 text-sm">
@@ -339,7 +384,20 @@ export function DeviceCard({
               <span className="text-muted-foreground">Signal</span>
               <div className="flex items-center gap-1">
                 <SignalIcon className={cn('h-4 w-4', signalColor)} />
-                <span>{device.signalStrength}</span>
+                <span>
+                  {device.signalDbm
+                    ? `${device.signalDbm} dBm${device.txMbps ? ` · ${Math.round(device.txMbps)} Mbps` : ''}`
+                    : device.signalStrength}
+                </span>
+              </div>
+            </div>
+          )}
+          {!isOnline && timeAgo(device.lastSeen) && (
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Last seen</span>
+              <div className="flex items-center gap-1">
+                <Clock className="h-3 w-3 text-muted-foreground" />
+                <span>{timeAgo(device.lastSeen)}</span>
               </div>
             </div>
           )}

@@ -10,6 +10,7 @@ import { RebootDialog } from '@/components/reboot-dialog';
 import { SchedulerDialog } from '@/components/scheduler-dialog';
 import { ScheduledTasks } from '@/components/scheduled-tasks';
 import { DnsSettingsDialog } from '@/components/dns-settings-dialog';
+import { DefaultBandwidthCard } from '@/components/default-bandwidth-card';
 import { DhcpDnsDialog } from '@/components/dhcp-dns-dialog';
 import { AgentStatus } from '@/components/agent-status';
 import { api, isAuthenticated } from '@/lib/api';
@@ -208,6 +209,9 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Default Bandwidth Limit */}
+        <DefaultBandwidthCard disabled={!health?.routerConnected} />
 
         {/* DNS Settings */}
         <Card>

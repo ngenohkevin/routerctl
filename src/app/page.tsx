@@ -3,13 +3,22 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Router, RefreshCw, Wifi, Cable, Ban, Settings, LogOut, ScrollText, Network, Gauge } from 'lucide-react';
+import { Router, RefreshCw, Wifi, Cable, Ban, Settings, LogOut, ScrollText, Network, Gauge, Search, Activity, SearchX } from 'lucide-react';
 import { api, isAuthenticated } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { DeviceCard } from '@/components/device-card';
+import { DeviceDetailDialog } from '@/components/device-detail-dialog';
 import { SystemStatus } from '@/components/system-status';
 import { AgentStatus } from '@/components/agent-status';
 import { BandwidthDialog } from '@/components/bandwidth-dialog';
@@ -64,6 +73,9 @@ export default function Dashboard() {
   const [priorityDialogOpen, setPriorityDialogOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{ mac: string; currentName: string } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'default' | 'name' | 'ip' | 'usage'>('default');
+  const [detailMac, setDetailMac] = useState<string | null>(null);
 
   useEffect(() => {
     // Initial fetch
@@ -225,7 +237,74 @@ export default function Dashboard() {
     (d) => !isWifiDevice(d) && d.interface && d.interface.length > 0
   );
 
-  const blockedDevices = devices.filter((d) => d.isBlocked);
+  const blockedDevices = lanDevices.filter((d) => d.isBlocked);
+
+  // Search + sort applied to every tab's list
+  const displayNameOf = (d: Device) =>
+    d.comment || d.hostname || d.deviceModel || d.vendor || d.ip;
+
+  const matchesQuery = (d: Device) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [d.comment, d.hostname, d.deviceModel, d.vendor, d.ip, d.mac].some((f) =>
+      f?.toLowerCase().includes(q)
+    );
+  };
+
+  const ipKey = (ip: string) =>
+    ip.split('.').map((o) => o.padStart(3, '0')).join('.');
+
+  const usageOf = (d: Device) =>
+    parseInt(d.bytesIn || '0', 10) + parseInt(d.bytesOut || '0', 10);
+
+  const sortDevices = (list: Device[]) => {
+    if (sortBy === 'default') return list;
+    const sorted = [...list];
+    if (sortBy === 'name') {
+      sorted.sort((a, b) => displayNameOf(a).localeCompare(displayNameOf(b)));
+    } else if (sortBy === 'ip') {
+      sorted.sort((a, b) => ipKey(a.ip).localeCompare(ipKey(b.ip)));
+    } else if (sortBy === 'usage') {
+      sorted.sort((a, b) => usageOf(b) - usageOf(a));
+    }
+    return sorted;
+  };
+
+  const detailDevice = detailMac ? devices.find((d) => d.mac === detailMac) || null : null;
+
+  const renderDeviceGrid = (list: Device[], emptyMessage: string) => {
+    const visible = sortDevices(list.filter(matchesQuery));
+    if (visible.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+          <SearchX className="h-8 w-8 mb-2 opacity-40" />
+          <p className="text-sm">
+            {searchQuery.trim() ? `No devices match "${searchQuery.trim()}"` : emptyMessage}
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {visible.map((device) => (
+          <DeviceCard
+            key={device.mac}
+            device={device}
+            onBlock={blockDevice}
+            onUnblock={unblockDevice}
+            onSetBandwidth={handleSetBandwidth}
+            onDisconnect={handleDisconnect}
+            onBoost={handleBoost}
+            onRename={handleRename}
+            onWakeOnLan={handleWakeOnLan}
+            onExempt={handleExempt}
+            onRemoveExemption={handleRemoveExemption}
+            onShowDetails={setDetailMac}
+          />
+        ))}
+      </div>
+    );
+  };
 
   const stats = {
     total: connectedDevices.length,
@@ -270,6 +349,12 @@ export default function Dashboard() {
                 <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3">
                   <Gauge className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Speed Test</span>
+                </Button>
+              </Link>
+              <Link href="/traffic">
+                <Button variant="outline" size="sm" className="h-8 px-2 sm:px-3">
+                  <Activity className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Traffic</span>
                 </Button>
               </Link>
               <Link href="/settings">
@@ -377,6 +462,30 @@ export default function Dashboard() {
                 </TabsList>
               </div>
 
+              {/* Search + sort */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name, IP, MAC, vendor…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 h-9"
+                  />
+                </div>
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+                  <SelectTrigger className="w-[130px] h-9 shrink-0">
+                    <SelectValue placeholder="Sort" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Sort: Default</SelectItem>
+                    <SelectItem value="name">Sort: Name</SelectItem>
+                    <SelectItem value="ip">Sort: IP</SelectItem>
+                    <SelectItem value="usage">Sort: Usage</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <TabsContent value="all" className="space-y-4">
                 {isLoading && devices.length === 0 ? (
                   <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -393,96 +502,24 @@ export default function Dashboard() {
                     ))}
                   </div>
                 ) : (
-                  <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {connectedDevices.map((device) => (
-                      <DeviceCard
-                        key={device.mac}
-                        device={device}
-                        onBlock={blockDevice}
-                        onUnblock={unblockDevice}
-                        onSetBandwidth={handleSetBandwidth}
-                        onDisconnect={handleDisconnect}
-                        onBoost={handleBoost}
-                        onRename={handleRename}
-                        onWakeOnLan={handleWakeOnLan}
-                        onExempt={handleExempt}
-                        onRemoveExemption={handleRemoveExemption}
-                      />
-                    ))}
-                  </div>
+                  renderDeviceGrid(connectedDevices, 'No devices are connected right now')
                 )}
               </TabsContent>
 
               <TabsContent value="wifi" className="space-y-4">
-                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {wifiDevices.map((device) => (
-                    <DeviceCard
-                      key={device.mac}
-                      device={device}
-                      onBlock={blockDevice}
-                      onUnblock={unblockDevice}
-                      onSetBandwidth={handleSetBandwidth}
-                      onDisconnect={handleDisconnect}
-                      onBoost={handleBoost}
-                      onRename={handleRename}
-                      onWakeOnLan={handleWakeOnLan}
-                    />
-                  ))}
-                </div>
+                {renderDeviceGrid(wifiDevices, 'No WiFi devices are connected')}
               </TabsContent>
 
               <TabsContent value="ethernet" className="space-y-4">
-                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {ethernetDevices.map((device) => (
-                    <DeviceCard
-                      key={device.mac}
-                      device={device}
-                      onBlock={blockDevice}
-                      onUnblock={unblockDevice}
-                      onSetBandwidth={handleSetBandwidth}
-                      onDisconnect={handleDisconnect}
-                      onBoost={handleBoost}
-                      onRename={handleRename}
-                      onWakeOnLan={handleWakeOnLan}
-                    />
-                  ))}
-                </div>
+                {renderDeviceGrid(ethernetDevices, 'No Ethernet devices are connected')}
               </TabsContent>
 
               <TabsContent value="disconnected" className="space-y-4">
-                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {disconnectedDevices.map((device) => (
-                    <DeviceCard
-                      key={device.mac}
-                      device={device}
-                      onBlock={blockDevice}
-                      onUnblock={unblockDevice}
-                      onSetBandwidth={handleSetBandwidth}
-                      onDisconnect={handleDisconnect}
-                      onBoost={handleBoost}
-                      onRename={handleRename}
-                      onWakeOnLan={handleWakeOnLan}
-                    />
-                  ))}
-                </div>
+                {renderDeviceGrid(disconnectedDevices, 'No offline devices')}
               </TabsContent>
 
               <TabsContent value="blocked" className="space-y-4">
-                <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {blockedDevices.map((device) => (
-                    <DeviceCard
-                      key={device.mac}
-                      device={device}
-                      onBlock={blockDevice}
-                      onUnblock={unblockDevice}
-                      onSetBandwidth={handleSetBandwidth}
-                      onDisconnect={handleDisconnect}
-                      onBoost={handleBoost}
-                      onRename={handleRename}
-                      onWakeOnLan={handleWakeOnLan}
-                    />
-                  ))}
-                </div>
+                {renderDeviceGrid(blockedDevices, 'No blocked devices')}
               </TabsContent>
             </Tabs>
           </div>
@@ -521,6 +558,12 @@ export default function Dashboard() {
         onOpenChange={setPriorityDialogOpen}
         onSetPriority={handleSavePriority}
         onRemovePriority={handleRemovePriority}
+      />
+
+      <DeviceDetailDialog
+        device={detailDevice}
+        open={detailMac !== null}
+        onOpenChange={(open) => !open && setDetailMac(null)}
       />
     </div>
   );

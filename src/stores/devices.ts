@@ -194,11 +194,14 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   setDeviceName: async (mac: string, name: string) => {
     try {
       await api.setDeviceName(mac, name);
+      // Optimistic patch for instant feedback, then refetch — the agent
+      // stores the name as the DHCP lease comment and may normalize it.
       set((state) => ({
         devices: state.devices.map((d) =>
-          d.mac === mac ? { ...d, hostname: name, comment: name } : d
+          d.mac === mac ? { ...d, comment: name } : d
         ),
       }));
+      await get().fetchDevices();
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to set device name',
