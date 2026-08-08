@@ -501,14 +501,25 @@ export const api = {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${API_BASE}/nettest/speedtest?${params.toString()}`, {
-          headers,
-          signal: controller.signal,
-          cache: 'no-store',
-        });
+        let response: Response | undefined;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          response = await fetch(`${API_BASE}/nettest/speedtest?${params.toString()}`, {
+            headers,
+            signal: controller.signal,
+            cache: 'no-store',
+          });
+          // 409 = a previous test (often one abandoned by a page refresh) is
+          // still releasing its lock. It clears within a couple of seconds
+          // now that client disconnects propagate, so wait and retry once.
+          if (response.status === 409 && attempt === 0) {
+            await new Promise((r) => setTimeout(r, 2500));
+            continue;
+          }
+          break;
+        }
 
-        if (!response.ok || !response.body) {
-          const err = await response.json().catch(() => ({ error: 'Speed test failed' }));
+        if (!response || !response.ok || !response.body) {
+          const err = (await response?.json().catch(() => null)) ?? { error: 'Speed test failed' };
           onProgress({ phase: 'error', speed: 0, ping: 0, jitter: 0, server: {} as SpeedTestServer, error: err.error });
           return;
         }
@@ -571,14 +582,23 @@ export const api = {
         const headers: Record<string, string> = { Accept: 'text/event-stream' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE}/nettest/streaming`, {
-          headers,
-          signal: controller.signal,
-          cache: 'no-store',
-        });
+        let response: Response | undefined;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          response = await fetch(`${API_BASE}/nettest/streaming`, {
+            headers,
+            signal: controller.signal,
+            cache: 'no-store',
+          });
+          // See runNetSpeedTest: wait out a stale lock from an abandoned test.
+          if (response.status === 409 && attempt === 0) {
+            await new Promise((r) => setTimeout(r, 2500));
+            continue;
+          }
+          break;
+        }
 
-        if (!response.ok || !response.body) {
-          const err = await response.json().catch(() => ({ error: 'Streaming test failed' }));
+        if (!response || !response.ok || !response.body) {
+          const err = (await response?.json().catch(() => null)) ?? { error: 'Streaming test failed' };
           onProgress({ phase: 'error', error: err.error });
           return;
         }

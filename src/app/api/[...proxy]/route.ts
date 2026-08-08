@@ -53,6 +53,11 @@ async function proxyRequest(
       method,
       headers,
       cache: 'no-store',
+      // Propagate client disconnects (page refresh/navigation) to the agent.
+      // Without this the upstream request keeps running after the browser is
+      // gone — an abandoned speed test held its "already in progress" lock
+      // until the 90s hard timeout.
+      signal: request.signal,
       // @ts-expect-error - duplex is needed for streaming
       duplex: 'half',
     };
