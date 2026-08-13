@@ -237,80 +237,82 @@ export default function SpeedTestPage() {
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 
-          {/* Speed Test Tab */}
+          {/* Speed Test Tab — test stage (focal) + lines rail */}
           <TabsContent value="speedtest" className="space-y-6">
-            <Card>
-              <UplinksCard
-          onTest={(iface, label) => startSpeedTest(iface, label)}
-          allowSetPrimary
-          disabled={isRunning}
-        />
-
-        <CardContent className="pt-6 flex flex-col items-center gap-4">
-                <SpeedGauge
-                  value={gaugeValue}
-                  max={gaugeMax}
-                  label={gaugeLabel}
-                  phase={phase}
-                  ping={gaugePing}
-                />
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-                  <Select
-                    value={selectedServerID || 'auto'}
-                    onValueChange={(v) => setSelectedServerID(v === 'auto' ? '' : v)}
-                    disabled={isRunning}
-                  >
-                    <SelectTrigger className="w-full sm:w-72" aria-label="Speed test server">
-                      <SelectValue placeholder="Auto (nearest server)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="auto">
-                        Auto (nearest server)
-                      </SelectItem>
-                      {servers.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.sponsor} — {s.name}, {s.country} ({s.distance} km)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="lg"
-                    onClick={() => startSpeedTest()}
-                    disabled={isRunning}
-                    className="gap-2"
-                  >
-                    {isRunning ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        Testing...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-4 w-4" />
-                        Run Speed Test
-                      </>
-                    )}
-                  </Button>
-                </div>
-                {serversLoading && (
-                  <p className="text-xs text-muted-foreground">Loading nearby servers…</p>
-                )}
-                {(isp || lastResult) && (
-                  <div className="text-xs text-muted-foreground text-center space-y-0.5">
-                    {isp && (
-                      <p>ISP: <span className="text-foreground font-medium">{isp}</span></p>
-                    )}
-                    {lastResult && (
-                      <p>
-                        Server: {lastResult.server.sponsor} ({lastResult.server.name}, {lastResult.server.country})
-                        — {lastResult.server.distance} km away
-                      </p>
+            <div className="grid gap-6 lg:grid-cols-3">
+              <Card className="lg:col-span-2">
+                <CardContent className="pt-8 pb-6 h-full flex flex-col items-center justify-center gap-6">
+                  <SpeedGauge
+                    value={gaugeValue}
+                    max={gaugeMax}
+                    label={gaugeLabel}
+                    phase={phase}
+                    ping={gaugePing}
+                  />
+                  <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+                    <Button
+                      size="lg"
+                      onClick={() => startSpeedTest()}
+                      disabled={isRunning}
+                      className="gap-2 w-full sm:w-auto sm:px-10"
+                    >
+                      {isRunning ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Testing...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4" />
+                          Run Speed Test
+                        </>
+                      )}
+                    </Button>
+                    <Select
+                      value={selectedServerID || 'auto'}
+                      onValueChange={(v) => setSelectedServerID(v === 'auto' ? '' : v)}
+                      disabled={isRunning}
+                    >
+                      <SelectTrigger
+                        className="w-full h-8 text-xs text-muted-foreground border-border/60"
+                        aria-label="Speed test server"
+                      >
+                        <SelectValue placeholder="Auto (nearest server)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto (nearest server)</SelectItem>
+                        {servers.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.sponsor} — {s.name}, {s.country} ({s.distance} km)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {serversLoading && (
+                      <p className="text-[10px] text-muted-foreground">Loading nearby servers…</p>
                     )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  {(isp || lastResult) && (
+                    <div className="text-xs text-muted-foreground text-center space-y-0.5">
+                      {isp && (
+                        <p>ISP: <span className="text-foreground font-medium">{isp}</span></p>
+                      )}
+                      {lastResult && (
+                        <p>
+                          {lastResult.server.sponsor} ({lastResult.server.name}) — {lastResult.server.distance} km
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <UplinksCard
+                onTest={(iface, label) => startSpeedTest(iface, label)}
+                allowSetPrimary
+                disabled={isRunning}
+              />
+            </div>
 
             <SpeedResultCards
               ping={cardPing}
