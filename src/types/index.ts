@@ -53,6 +53,8 @@ export interface WANLink {
   status: string;    // dhcp client status, "bound" = up
   linkRate?: string; // "1Gbps"
   primary: boolean;
+  alive?: boolean;   // live probe ping through this uplink succeeded
+  pingMs?: number;   // live probe RTT (ms)
   // From the latest speed test recorded for this uplink
   isp?: string;
   lastDownload?: number; // Mbps
