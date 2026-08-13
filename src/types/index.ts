@@ -277,7 +277,9 @@ export interface NetSpeedTestResult {
   upload: number;   // Mbps
   ping: number;     // ms
   jitter: number;   // ms
-  isp?: string;     // client ISP (from speedtest.net config)
+  isp?: string;     // egress ISP as seen from the internet (may be a transit provider)
+  wan?: string;     // uplink interface the test ran through ("WAN", "WAN2")
+  wanLabel?: string; // human name of that uplink ("Faiba", "Vilcom")
 }
 
 export interface SpeedTestServer {

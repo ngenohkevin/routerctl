@@ -43,6 +43,10 @@ export default function SpeedTestPage() {
   const [cardDownload, setCardDownload] = useState<number | null>(null);
   const [cardUpload, setCardUpload] = useState<number | null>(null);
   const [isp, setIsp] = useState<string | null>(null);
+  // Which uplink the current/last test ran through ("Faiba", "Vilcom")
+  const [testedLine, setTestedLine] = useState<string | null>(null);
+  // Bumped when a test completes so the uplinks rail refreshes instantly
+  const [uplinkRefresh, setUplinkRefresh] = useState(0);
 
   // Latency state
   const [latencyTargets, setLatencyTargets] = useState<LatencyTarget[]>([]);
@@ -117,6 +121,7 @@ export default function SpeedTestPage() {
     setCardDownload(null);
     setCardUpload(null);
     setIsp(null);
+    setTestedLine(wanLabel ?? null);
 
     let pingDone = false;
     let downloadDone = false;
@@ -139,7 +144,7 @@ export default function SpeedTestPage() {
           setCardJitter(ev.jitter);
         }
         setPhase('download');
-        setGaugeLabel('Testing download...');
+        setGaugeLabel(wanLabel ? `Testing download via ${wanLabel}...` : 'Testing download...');
         // Capture every event's speed (including the final 0 from done),
         // so the download card never displays 0 Mbps just because the last
         // tick was a phase boundary.
@@ -154,7 +159,7 @@ export default function SpeedTestPage() {
           setCardDownload(lastDownload);
         }
         setPhase('upload');
-        setGaugeLabel('Testing upload...');
+        setGaugeLabel(wanLabel ? `Testing upload via ${wanLabel}...` : 'Testing upload...');
         if (ev.speed > 0) {
           setGaugeValue(ev.speed);
         }
@@ -166,8 +171,11 @@ export default function SpeedTestPage() {
         setCardUpload(ev.result.upload);
         setGaugeValue(ev.result.download);
         setGaugeLabel(`${ev.result.server.sponsor} — ${ev.result.server.name}`);
+        // Auto tests learn their line from the agent (the current primary)
+        setTestedLine(ev.result.wanLabel || wanLabel || null);
         setPhase('done');
         fetchHistory();
+        setUplinkRefresh((n) => n + 1);
       } else if (ev.phase === 'error') {
         setPhase('idle');
         setGaugeValue(0);
@@ -292,10 +300,13 @@ export default function SpeedTestPage() {
                       <p className="text-[10px] text-muted-foreground">Loading nearby servers…</p>
                     )}
                   </div>
-                  {(isp || lastResult) && (
+                  {(testedLine || isp || lastResult) && (
                     <div className="text-xs text-muted-foreground text-center space-y-0.5">
+                      {testedLine && (
+                        <p>Line: <span className="text-foreground font-medium">{testedLine}</span></p>
+                      )}
                       {isp && (
-                        <p>ISP: <span className="text-foreground font-medium">{isp}</span></p>
+                        <p className="text-[10px]">egress seen as {isp}</p>
                       )}
                       {lastResult && (
                         <p>
@@ -311,6 +322,7 @@ export default function SpeedTestPage() {
                 onTest={(iface, label) => startSpeedTest(iface, label)}
                 allowSetPrimary
                 disabled={isRunning}
+                refreshToken={uplinkRefresh}
               />
             </div>
 
@@ -386,7 +398,7 @@ export default function SpeedTestPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
-                        <TableHead>ISP</TableHead>
+                        <TableHead>Line</TableHead>
                         <TableHead>Server</TableHead>
                         <TableHead>Download</TableHead>
                         <TableHead>Upload</TableHead>
@@ -405,7 +417,7 @@ export default function SpeedTestPage() {
                             })}
                           </TableCell>
                           <TableCell className="text-xs">
-                            {r.isp || '—'}
+                            <span className="text-foreground font-medium">{r.wanLabel || r.isp || '—'}</span>
                           </TableCell>
                           <TableCell className="text-xs">
                             {r.server.sponsor}

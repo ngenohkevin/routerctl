@@ -27,9 +27,11 @@ interface UplinksCardProps {
   allowSetPrimary?: boolean;
   /** Disable actions (e.g. while a speed test is running). */
   disabled?: boolean;
+  /** Bump this counter to force an immediate refresh (e.g. when a test finishes). */
+  refreshToken?: number;
 }
 
-export function UplinksCard({ onTest, allowSetPrimary, disabled }: UplinksCardProps) {
+export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }: UplinksCardProps) {
   const [links, setLinks] = useState<WANLink[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<WANLink | null>(null);
@@ -51,6 +53,12 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled }: UplinksCardPr
     const t = setInterval(fetchLinks, 30000);
     return () => clearInterval(t);
   }, [fetchLinks]);
+
+  // Refresh immediately when the parent signals a completed test — the new
+  // result should appear on the line's card right away, not on the next poll.
+  useEffect(() => {
+    if (refreshToken) fetchLinks();
+  }, [refreshToken, fetchLinks]);
 
   const handleMakePrimary = async () => {
     if (!confirmTarget) return;
@@ -128,9 +136,6 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled }: UplinksCardPr
                   )}
                 </div>
               </div>
-              {l.isp && (
-                <div className="text-xs text-muted-foreground truncate">{l.isp}</div>
-              )}
               {(l.lastDownload ?? 0) > 0 ? (
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 tabular-nums">
                   <span className="text-base font-semibold text-green-500 whitespace-nowrap">
