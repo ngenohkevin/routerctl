@@ -108,29 +108,36 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled }: UplinksCardPr
                   </Badge>
                 )}
               </div>
-              <div className="text-xs text-muted-foreground">
+              {l.isp && (
+                <div className="text-xs text-muted-foreground truncate">{l.isp}</div>
+              )}
+              {(l.lastDownload ?? 0) > 0 ? (
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                  <span className="text-base font-semibold text-green-500 whitespace-nowrap">
+                    ↓ {l.lastDownload}
+                    <span className="text-[10px] font-normal text-muted-foreground ml-0.5">Mbps</span>
+                  </span>
+                  <span className="text-base font-semibold text-blue-500 whitespace-nowrap">
+                    ↑ {l.lastUpload}
+                    <span className="text-[10px] font-normal text-muted-foreground ml-0.5">Mbps</span>
+                  </span>
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                    {l.lastPing ? `${l.lastPing} ms` : ''}
+                    {l.lastTestAt && timeAgo(l.lastTestAt) ? ` · ${timeAgo(l.lastTestAt)}` : ''}
+                  </span>
+                </div>
+              ) : (
+                !down && (
+                  <div className="text-[10px] text-muted-foreground italic">
+                    not measured yet — run a test on this line
+                  </div>
+                )
+              )}
+              <div className="text-[10px] text-muted-foreground truncate">
                 {down
                   ? `no lease (${l.status || 'disconnected'})`
-                  : `${l.address || '—'} via ${l.gateway || '—'}${l.linkRate ? ` · ${l.linkRate}` : ''}`}
+                  : `${l.address || '—'} via ${l.gateway || '—'}`}
               </div>
-              {l.isp && (
-                <div className="text-xs truncate">
-                  <span className="text-muted-foreground">ISP: </span>
-                  {l.isp}
-                </div>
-              )}
-              {(l.lastDownload ?? 0) > 0 && (
-                <div className="text-xs flex items-center gap-2">
-                  <span className="text-green-500 font-medium">↓ {l.lastDownload} Mbps</span>
-                  <span className="text-blue-500 font-medium">↑ {l.lastUpload} Mbps</span>
-                  {l.lastPing ? (
-                    <span className="text-muted-foreground">{l.lastPing} ms</span>
-                  ) : null}
-                  {l.lastTestAt && timeAgo(l.lastTestAt) ? (
-                    <span className="text-muted-foreground">· tested {timeAgo(l.lastTestAt)}</span>
-                  ) : null}
-                </div>
-              )}
               {(onTest || allowSetPrimary) && (
                 <div className="flex gap-2 pt-1">
                   {onTest && (
