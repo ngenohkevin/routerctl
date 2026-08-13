@@ -20,6 +20,7 @@ import { SpeedHistoryChart } from '@/components/speed-history-chart';
 import { StreamingTest } from '@/components/streaming-test';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, isAuthenticated } from '@/lib/api';
+import { UplinksCard } from '@/components/uplinks-card';
 import { toast } from 'sonner';
 import type { HealthStatus, NetSpeedTestResult, LatencyTarget, SpeedTestServer } from '@/types';
 
@@ -103,14 +104,14 @@ export default function SpeedTestPage() {
     }
   };
 
-  const startSpeedTest = () => {
+  const startSpeedTest = (wan?: string, wanLabel?: string) => {
     if (phase !== 'idle' && phase !== 'done') return;
 
     setLastResult(null);
     setGaugeValue(0);
     setGaugePing(0);
     setPhase('ping');
-    setGaugeLabel('Measuring ping...');
+    setGaugeLabel(wanLabel ? `Measuring ping via ${wanLabel}...` : 'Measuring ping...');
     setCardPing(null);
     setCardJitter(null);
     setCardDownload(null);
@@ -173,7 +174,7 @@ export default function SpeedTestPage() {
         setGaugeLabel('Ready');
         toast.error(ev.error || 'Speed test failed');
       }
-    });
+    }, wan);
 
     cleanupRef.current = cleanup;
   };
@@ -239,7 +240,13 @@ export default function SpeedTestPage() {
           {/* Speed Test Tab */}
           <TabsContent value="speedtest" className="space-y-6">
             <Card>
-              <CardContent className="pt-6 flex flex-col items-center gap-4">
+              <UplinksCard
+          onTest={(iface, label) => startSpeedTest(iface, label)}
+          allowSetPrimary
+          disabled={isRunning}
+        />
+
+        <CardContent className="pt-6 flex flex-col items-center gap-4">
                 <SpeedGauge
                   value={gaugeValue}
                   max={gaugeMax}
@@ -269,7 +276,7 @@ export default function SpeedTestPage() {
                   </Select>
                   <Button
                     size="lg"
-                    onClick={startSpeedTest}
+                    onClick={() => startSpeedTest()}
                     disabled={isRunning}
                     className="gap-2"
                   >

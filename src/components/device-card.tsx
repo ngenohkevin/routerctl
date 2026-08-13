@@ -122,7 +122,7 @@ export function DeviceCard({
   const isWifi = !!device.signalStrength ||
     mobileTypes.includes(device.deviceType?.toLowerCase() || '') ||
     isRandomMAC;
-  const isWan = device.interface === 'WAN';
+  const isWan = device.wanSide || device.interface === 'WAN';
   const isOnline = device.status === 'bound' || device.status === 'dynamic';
   const signalQuality = getSignalQuality(device.signalStrength);
 

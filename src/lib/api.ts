@@ -22,6 +22,7 @@ import type {
   LatencyResult,
   StreamingTestResult,
   StreamingCDN,
+  WANLink,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -473,6 +474,17 @@ export const api = {
   },
 
   // Network Speed Test (runs from Pi) — SSE streaming via fetch ReadableStream
+  async getWanLinks(): Promise<{ links: WANLink[] }> {
+    return fetchApi<{ links: WANLink[] }>('/wan/links');
+  },
+
+  async setPrimaryWan(iface: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/wan/primary', {
+      method: 'POST',
+      body: JSON.stringify({ interface: iface }),
+    });
+  },
+
   runNetSpeedTest(
     serverID: string | undefined,
     onProgress: (event: {
@@ -484,11 +496,13 @@ export const api = {
       isp?: string;
       result?: NetSpeedTestResult;
       error?: string;
-    }) => void
+    }) => void,
+    wan?: string
   ): () => void {
     const token = getToken();
     const params = new URLSearchParams();
     if (serverID) params.set('serverID', serverID);
+    if (wan) params.set('wan', wan);
 
     const controller = new AbortController();
 

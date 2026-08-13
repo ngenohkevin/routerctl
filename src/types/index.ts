@@ -41,6 +41,18 @@ export interface Device {
   isExempt: boolean;
   // Priority (1=highest, 8=default/normal, 0=not set)
   priority: number;
+  // Upstream equipment behind an uplink interface (ISP CPE) — hidden in the UI
+  wanSide?: boolean;
+}
+
+export interface WANLink {
+  interface: string; // "WAN", "WAN2"
+  label?: string;    // "Faiba", "Vilcom"
+  gateway?: string;
+  address?: string;
+  status: string;    // dhcp client status, "bound" = up
+  linkRate?: string; // "1Gbps"
+  primary: boolean;
 }
 
 export interface SystemInfo {

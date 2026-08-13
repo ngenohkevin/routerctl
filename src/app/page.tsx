@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { DeviceCard } from '@/components/device-card';
 import { DeviceDetailDialog } from '@/components/device-detail-dialog';
+import { UplinksCard } from '@/components/uplinks-card';
 import { SystemStatus } from '@/components/system-status';
 import { AgentStatus } from '@/components/agent-status';
 import { BandwidthDialog } from '@/components/bandwidth-dialog';
@@ -220,8 +221,8 @@ export default function Dashboard() {
     mobileTypes.includes(d.deviceType?.toLowerCase() || '') ||
     hasRandomizedMAC(d.mac);
 
-  // Exclude WAN devices from main list (they're upstream, not our network)
-  const lanDevices = devices.filter((d) => d.interface !== 'WAN');
+  // Exclude WAN-side devices (ISP CPEs on any uplink — agent tags them)
+  const lanDevices = devices.filter((d) => !d.wanSide && d.interface !== 'WAN');
 
   // Connected devices: 'bound' (connected with DHCP) or 'dynamic' (connected, ARP-only)
   const connectedDevices = lanDevices.filter((d) => d.status === 'bound' || d.status === 'dynamic');
@@ -526,6 +527,7 @@ export default function Dashboard() {
 
           {/* Sidebar */}
           <div className="space-y-4">
+            <UplinksCard />
             <SystemStatus systemInfo={systemInfo} />
 
             {lastUpdated && (
