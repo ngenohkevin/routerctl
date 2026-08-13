@@ -108,6 +108,7 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
         {links.map((l) => {
           const down = l.status !== 'bound';
           const noInternet = !down && !l.alive;
+          const dead = down || noInternet;
           return (
             <div key={l.interface} className="rounded-lg border border-border/60 p-3 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
@@ -187,7 +188,7 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 gap-1 text-xs"
-                      disabled={disabled || down}
+                      disabled={disabled || dead}
                       onClick={() => onTest(l.interface, l.label || l.interface)}
                     >
                       <Play className="h-3 w-3" />
@@ -199,7 +200,7 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 gap-1 text-xs"
-                      disabled={disabled || down || switching}
+                      disabled={disabled || dead || switching}
                       onClick={() => setConfirmTarget(l)}
                     >
                       {switching ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Crown className="h-3 w-3" />}
@@ -218,22 +219,26 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
               <span className="text-[10px] text-muted-foreground">Cloudflare · YouTube</span>
             </div>
             <div className="flex gap-1.5">
-              {links.map((l) => (
-                <Button
-                  key={l.interface}
-                  size="sm"
-                  variant={cdn.interface === l.interface ? 'default' : 'outline'}
-                  className="h-7 flex-1 px-2 text-xs"
-                  disabled={disabled || cdnSwitching || l.status !== 'bound'}
-                  onClick={() => handleCdnSwitch(l)}
-                >
-                  {cdnSwitching && cdn.interface !== l.interface ? (
-                    <RefreshCw className="h-3 w-3 animate-spin" />
-                  ) : (
-                    l.label || l.interface
-                  )}
-                </Button>
-              ))}
+              {links.map((l) => {
+                const dead = l.status !== 'bound' || !l.alive;
+                return (
+                  <Button
+                    key={l.interface}
+                    size="sm"
+                    variant={cdn.interface === l.interface ? 'default' : 'outline'}
+                    className="h-7 flex-1 px-2 text-xs"
+                    disabled={disabled || cdnSwitching || dead}
+                    title={dead ? 'Line has no internet' : undefined}
+                    onClick={() => handleCdnSwitch(l)}
+                  >
+                    {cdnSwitching && cdn.interface !== l.interface ? (
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                    ) : (
+                      l.label || l.interface
+                    )}
+                  </Button>
+                );
+              })}
             </div>
             <p className="text-[10px] text-muted-foreground">
               {cdn.active < cdn.routes

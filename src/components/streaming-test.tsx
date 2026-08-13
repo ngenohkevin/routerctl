@@ -70,8 +70,14 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
 
   useEffect(() => {
     fetchHistory();
-    api.getWanLinks().then((res) => setWanLinks(res.links || [])).catch(() => setWanLinks([]));
+    const fetchLinks = () =>
+      api.getWanLinks().then((res) => setWanLinks(res.links || [])).catch(() => {});
+    fetchLinks();
+    const t = setInterval(fetchLinks, 30000);
+    return () => clearInterval(t);
   }, []);
+
+  const lineDead = (l: WANLink) => l.status !== 'bound' || !l.alive;
 
   const clearHistory = async () => {
     try {
@@ -84,6 +90,13 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
   };
 
   function startTest() {
+    if (wanChoice) {
+      const chosen = wanLinks.find((l) => l.interface === wanChoice);
+      if (chosen && lineDead(chosen)) {
+        toast.error(`${chosen.label || chosen.interface} has no internet — can't measure it`);
+        return;
+      }
+    }
     cancelRef.current?.();
     setPhase('cdn');
     setLiveSpeed(null);
@@ -155,8 +168,9 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
                 <SelectContent>
                   <SelectItem value="auto">Current routing</SelectItem>
                   {wanLinks.map((l) => (
-                    <SelectItem key={l.interface} value={l.interface}>
+                    <SelectItem key={l.interface} value={l.interface} disabled={lineDead(l)}>
                       via {l.label || l.interface}
+                      {lineDead(l) ? ' — no internet' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
