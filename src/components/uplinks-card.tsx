@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { timeAgo } from '@/components/device-detail-dialog';
 import type { WANLink } from '@/types';
 
 interface UplinksCardProps {
@@ -112,6 +113,24 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled }: UplinksCardPr
                   ? `no lease (${l.status || 'disconnected'})`
                   : `${l.address || '—'} via ${l.gateway || '—'}${l.linkRate ? ` · ${l.linkRate}` : ''}`}
               </div>
+              {l.isp && (
+                <div className="text-xs truncate">
+                  <span className="text-muted-foreground">ISP: </span>
+                  {l.isp}
+                </div>
+              )}
+              {(l.lastDownload ?? 0) > 0 && (
+                <div className="text-xs flex items-center gap-2">
+                  <span className="text-green-500 font-medium">↓ {l.lastDownload} Mbps</span>
+                  <span className="text-blue-500 font-medium">↑ {l.lastUpload} Mbps</span>
+                  {l.lastPing ? (
+                    <span className="text-muted-foreground">{l.lastPing} ms</span>
+                  ) : null}
+                  {l.lastTestAt && timeAgo(l.lastTestAt) ? (
+                    <span className="text-muted-foreground">· tested {timeAgo(l.lastTestAt)}</span>
+                  ) : null}
+                </div>
+              )}
               {(onTest || allowSetPrimary) && (
                 <div className="flex gap-2 pt-1">
                   {onTest && (

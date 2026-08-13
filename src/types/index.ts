@@ -53,6 +53,12 @@ export interface WANLink {
   status: string;    // dhcp client status, "bound" = up
   linkRate?: string; // "1Gbps"
   primary: boolean;
+  // From the latest speed test recorded for this uplink
+  isp?: string;
+  lastDownload?: number; // Mbps
+  lastUpload?: number;   // Mbps
+  lastPing?: number;     // ms
+  lastTestAt?: string;   // RFC3339
 }
 
 export interface SystemInfo {
