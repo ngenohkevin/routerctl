@@ -23,6 +23,7 @@ import type {
   StreamingTestResult,
   StreamingCDN,
   WANLink,
+  CDNSteering,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -485,6 +486,17 @@ export const api = {
     });
   },
 
+  async getCdnSteering(): Promise<CDNSteering> {
+    return fetchApi<CDNSteering>('/wan/cdn');
+  },
+
+  async setCdnSteering(iface: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>('/wan/cdn', {
+      method: 'POST',
+      body: JSON.stringify({ interface: iface }),
+    });
+  },
+
   runNetSpeedTest(
     serverID: string | undefined,
     onProgress: (event: {
@@ -586,7 +598,8 @@ export const api = {
       cdn?: StreamingCDN;
       result?: StreamingTestResult;
       error?: string;
-    }) => void
+    }) => void,
+    wan?: string
   ): () => void {
     const token = getToken();
     const controller = new AbortController();
@@ -596,9 +609,10 @@ export const api = {
         const headers: Record<string, string> = { Accept: 'text/event-stream' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
+        const url = `${API_BASE}/nettest/streaming${wan ? `?wan=${encodeURIComponent(wan)}` : ''}`;
         let response: Response | undefined;
         for (let attempt = 0; attempt < 2; attempt++) {
-          response = await fetch(`${API_BASE}/nettest/streaming`, {
+          response = await fetch(url, {
             headers,
             signal: controller.signal,
             cache: 'no-store',

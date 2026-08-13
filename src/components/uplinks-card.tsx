@@ -18,7 +18,7 @@ import {
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { timeAgo } from '@/components/device-detail-dialog';
-import type { WANLink } from '@/types';
+import type { WANLink, CDNSteering } from '@/types';
 
 interface UplinksCardProps {
   /** When provided, each link gets a "Test" button that measures that line. */
@@ -36,6 +36,8 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
   const [loaded, setLoaded] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<WANLink | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [cdn, setCdn] = useState<CDNSteering | null>(null);
+  const [cdnSwitching, setCdnSwitching] = useState(false);
 
   const fetchLinks = useCallback(async () => {
     try {
@@ -46,6 +48,7 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
     } finally {
       setLoaded(true);
     }
+    api.getCdnSteering().then(setCdn).catch(() => null);
   }, []);
 
   useEffect(() => {
@@ -59,6 +62,20 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
   useEffect(() => {
     if (refreshToken) fetchLinks();
   }, [refreshToken, fetchLinks]);
+
+  const handleCdnSwitch = async (l: WANLink) => {
+    if (!cdn || cdn.interface === l.interface) return;
+    setCdnSwitching(true);
+    try {
+      await api.setCdnSteering(l.interface);
+      toast.success(`Cloudflare + YouTube now via ${l.label || l.interface}`);
+      api.getCdnSteering().then(setCdn).catch(() => null);
+    } catch {
+      toast.error('Failed to switch CDN routing');
+    } finally {
+      setCdnSwitching(false);
+    }
+  };
 
   const handleMakePrimary = async () => {
     if (!confirmTarget) return;
@@ -194,6 +211,37 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
             </div>
           );
         })}
+        {cdn && cdn.routes > 0 && links.length > 1 && (
+          <div className="rounded-lg border border-border/60 p-3 space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-sm font-medium">CDN traffic</span>
+              <span className="text-[10px] text-muted-foreground">Cloudflare · YouTube</span>
+            </div>
+            <div className="flex gap-1.5">
+              {links.map((l) => (
+                <Button
+                  key={l.interface}
+                  size="sm"
+                  variant={cdn.interface === l.interface ? 'default' : 'outline'}
+                  className="h-7 flex-1 px-2 text-xs"
+                  disabled={disabled || cdnSwitching || l.status !== 'bound'}
+                  onClick={() => handleCdnSwitch(l)}
+                >
+                  {cdnSwitching && cdn.interface !== l.interface ? (
+                    <RefreshCw className="h-3 w-3 animate-spin" />
+                  ) : (
+                    l.label || l.interface
+                  )}
+                </Button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {cdn.active < cdn.routes
+                ? `${cdn.routes - cdn.active}/${cdn.routes} routes on fallback — chosen line has no internet`
+                : `${cdn.routes} destinations pinned · auto-falls back if the line drops`}
+            </p>
+          </div>
+        )}
         <p className="text-[10px] text-muted-foreground">
           Failover is automatic (~20–30s) if the primary stops passing traffic.
         </p>

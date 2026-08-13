@@ -6,10 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { StreamingCalculator } from '@/components/streaming-calculator';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import type { StreamingTestResult, StreamingCDN } from '@/types';
+import type { StreamingTestResult, StreamingCDN, WANLink } from '@/types';
 
 type Phase = 'idle' | 'cdn' | 'idle-latency' | 'download' | 'bufferbloat' | 'done' | 'error';
 
@@ -55,6 +58,8 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
   const [showCalculator, setShowCalculator] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<StreamingTestResult[]>([]);
+  const [wanLinks, setWanLinks] = useState<WANLink[]>([]);
+  const [wanChoice, setWanChoice] = useState<string>(''); // '' = current routing
   const cancelRef = useRef<(() => void) | null>(null);
 
   const isRunning = phase !== 'idle' && phase !== 'done' && phase !== 'error';
@@ -65,6 +70,7 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
 
   useEffect(() => {
     fetchHistory();
+    api.getWanLinks().then((res) => setWanLinks(res.links || [])).catch(() => setWanLinks([]));
   }, []);
 
   const clearHistory = async () => {
@@ -117,7 +123,7 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
         setError(ev.error ?? 'Test failed');
         return;
       }
-    });
+    }, wanChoice || undefined);
   }
 
   return (
@@ -137,7 +143,29 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
               {isRunning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               {isRunning ? 'Running…' : 'Run Streaming Test'}
             </Button>
+            {wanLinks.length > 1 && (
+              <Select
+                value={wanChoice || 'auto'}
+                onValueChange={(v) => setWanChoice(v === 'auto' ? '' : v)}
+                disabled={isRunning}
+              >
+                <SelectTrigger className="h-9 w-full sm:w-44 text-xs" aria-label="Measure via line">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Current routing</SelectItem>
+                  {wanLinks.map((l) => (
+                    <SelectItem key={l.interface} value={l.interface}>
+                      via {l.label || l.interface}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {isRunning && <span className="text-sm text-muted-foreground">{PHASE_LABEL[phase]}</span>}
+            {!isRunning && result?.wanLabel && (
+              <span className="text-xs text-muted-foreground">measured via {result.wanLabel}</span>
+            )}
             {phase === 'error' && error && (
               <span className="text-sm text-destructive">Error: {error}</span>
             )}

@@ -63,6 +63,14 @@ export interface WANLink {
   lastTestAt?: string;   // RFC3339
 }
 
+// Where the CDN destination routes (Cloudflare + Google/YouTube) exit
+export interface CDNSteering {
+  interface: string;
+  label?: string;
+  routes: number;
+  active: number;
+}
+
 export interface SystemInfo {
   platform: string;
   boardName: string;
@@ -330,6 +338,8 @@ export interface StreamingTestResult {
   qualities: StreamingQualityVerdict[];
   timestamp: string;
   durationSeconds: number;
+  wan?: string;      // uplink interface the test ran through
+  wanLabel?: string; // human name of that uplink ("Faiba", "Vilcom")
 }
 
 export interface LatencyResult {
