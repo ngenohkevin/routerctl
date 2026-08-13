@@ -104,3 +104,22 @@ export function parseCPULoad(load: string): number {
   const num = parseInt(load, 10);
   return isNaN(num) ? 0 : num;
 }
+
+// prettyBand turns RouterOS band strings ("5ghz-ax", "2ghz-n") into a
+// human label, or null when unknown/absent.
+export function prettyBand(band?: string): string | null {
+  if (!band) return null;
+  if (band.startsWith('5ghz')) return '5 GHz';
+  if (band.startsWith('2ghz')) return '2.4 GHz';
+  if (band.startsWith('6ghz')) return '6 GHz';
+  return band;
+}
+
+// formatByteCount renders a numeric byte count as B/KB/MB/GB.
+export function formatByteCount(n?: number): string {
+  if (!n || n <= 0) return '0 B';
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
+  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${n} B`;
+}

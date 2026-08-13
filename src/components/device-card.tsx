@@ -42,7 +42,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import type { Device } from '@/types';
-import { cn, getSignalQuality, formatBandwidth, formatDuration } from '@/lib/utils';
+import { cn, getSignalQuality, formatBandwidth, formatDuration, prettyBand, formatByteCount } from '@/lib/utils';
 import { timeAgo } from '@/components/device-detail-dialog';
 
 // Check if MAC uses randomized/private addressing (2nd hex digit is 2, 6, A, or E)
@@ -313,7 +313,9 @@ export function DeviceCard({
                 {isWifi ? (
                   <>
                     <Wifi className="h-4 w-4 text-blue-500" />
-                    <span className="text-blue-500 font-medium">WiFi</span>
+                    <span className="text-blue-500 font-medium">
+                      WiFi{prettyBand(device.band) ? ` · ${prettyBand(device.band)}` : ''}
+                    </span>
                   </>
                 ) : (
                   <>
@@ -413,6 +415,22 @@ export function DeviceCard({
                 <span className="flex items-center gap-0.5 text-blue-500">
                   <ArrowUp className="h-3 w-3" />
                   {formatRate(device.rateOut)}
+                </span>
+              </div>
+            </div>
+          )}
+          {/* Per-client WiFi session transfer (since association) */}
+          {((device.wifiDownBytes ?? 0) > 0 || (device.wifiUpBytes ?? 0) > 0) && (
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">WiFi session</span>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="flex items-center gap-0.5 text-green-500">
+                  <ArrowDown className="h-3 w-3" />
+                  {formatByteCount(device.wifiDownBytes)}
+                </span>
+                <span className="flex items-center gap-0.5 text-blue-500">
+                  <ArrowUp className="h-3 w-3" />
+                  {formatByteCount(device.wifiUpBytes)}
                 </span>
               </div>
             </div>

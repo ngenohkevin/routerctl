@@ -21,6 +21,10 @@ export interface Device {
   signalDbm?: number;
   txMbps?: number;
   rxMbps?: number;
+  band?: string; // e.g. "5ghz-ax" (RouterOS v7 wifi package)
+  // Per-client WiFi session counters (since association)
+  wifiDownBytes?: number;
+  wifiUpBytes?: number;
   // Vendor identification
   vendor?: string;
   deviceType?: string;
