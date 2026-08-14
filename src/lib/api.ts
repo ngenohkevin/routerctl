@@ -506,6 +506,7 @@ export const api = {
       jitter: number;
       server: SpeedTestServer;
       isp?: string;
+      message?: string;
       result?: NetSpeedTestResult;
       error?: string;
     }) => void,

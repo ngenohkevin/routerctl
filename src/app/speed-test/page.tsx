@@ -130,11 +130,18 @@ export default function SpeedTestPage() {
     const cleanup = api.runNetSpeedTest(selectedServerID || undefined, (ev) => {
       // ISP is sent from the ping phase onward; latch it as soon as it arrives.
       if (ev.isp) setIsp(ev.isp);
+      if (ev.phase === 'setup') {
+        // Narrated pre-test stages (routing switch, server discovery) — keep
+        // the pulsing gauge alive with a live label instead of a frozen one.
+        setPhase('ping');
+        if (ev.message) setGaugeLabel(ev.message);
+        return;
+      }
       if (ev.phase === 'ping') {
         setPhase('ping');
         if (ev.ping > 0) {
           setGaugePing(ev.ping);
-          setGaugeLabel('Measuring ping...');
+          setGaugeLabel(wanLabel ? `Measuring ping via ${wanLabel}...` : 'Measuring ping...');
         }
       } else if (ev.phase === 'download') {
         // Ping just finished — lock in ping/jitter cards
