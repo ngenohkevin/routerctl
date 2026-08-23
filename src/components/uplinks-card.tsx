@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Globe, Play, Crown, RefreshCw } from 'lucide-react';
+import { Globe, Play, Crown, RefreshCw, Pin } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -225,65 +225,88 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
         })}
         {cdn && cdn.groups.some((g) => g.routes > 0) && links.length > 1 && (
           <div className="rounded-lg border border-border/60 p-3 space-y-3">
-            <span className="text-sm font-medium">CDN traffic</span>
-            {cdn.groups.filter((g) => g.routes > 0).map((g) => (
-              <div key={g.group} className="space-y-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium">{GROUP_TITLES[g.group] || g.group}</span>
-                  {g.health && g.health.length > 0 && (
-                    <span className="text-[10px] text-muted-foreground tabular-nums truncate">
-                      {g.health.map((hh, i) => (
-                        <span key={hh.interface}>
-                          {i > 0 && ' · '}
-                          {hh.label || hh.interface}{' '}
-                          {hh.alive ? (
-                            <span className="text-green-500">{hh.pingMs} ms</span>
-                          ) : (
-                            <span className="text-red-500">✗</span>
-                          )}
-                        </span>
-                      ))}
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-sm font-medium">CDN traffic</span>
+              <span className="text-[10px] text-muted-foreground">tap a line to pin it</span>
+            </div>
+            {cdn.groups.filter((g) => g.routes > 0).map((g) => {
+              const isAuto = g.mode !== 'manual';
+              return (
+                <div key={g.group} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {GROUP_TITLES[g.group] || g.group}
                     </span>
+                    <Button
+                      size="sm"
+                      variant={isAuto ? 'secondary' : 'ghost'}
+                      className={
+                        'h-6 gap-1.5 px-2 text-[11px] ' +
+                        (isAuto ? '' : 'text-muted-foreground')
+                      }
+                      disabled={disabled || cdnSwitching || isAuto}
+                      onClick={() => handleCdnSwitch(g, 'auto', 'Auto')}
+                    >
+                      <span
+                        className={
+                          'h-1.5 w-1.5 rounded-full ' +
+                          (isAuto ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40')
+                        }
+                      />
+                      Auto
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {links.map((l) => {
+                      const dead = l.status !== 'bound' || !l.alive;
+                      const carrying = g.interface === l.interface;
+                      const pinned = !isAuto && carrying;
+                      const probe = g.health?.find((hh) => hh.interface === l.interface);
+                      return (
+                        <Button
+                          key={l.interface}
+                          variant="outline"
+                          disabled={disabled || cdnSwitching || dead}
+                          title={dead ? 'Line has no internet' : `Pin ${GROUP_TITLES[g.group] || g.group} to ${l.label || l.interface}`}
+                          onClick={() => handleCdnSwitch(g, l.interface, l.label || l.interface)}
+                          className={
+                            'h-auto flex-col items-start gap-0.5 px-2.5 py-1.5 ' +
+                            (carrying
+                              ? 'border-green-500/50 bg-green-500/5 hover:bg-green-500/10'
+                              : 'border-border/60')
+                          }
+                        >
+                          <span className="flex w-full items-center gap-1.5 text-xs font-medium">
+                            {carrying && (
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500 animate-pulse" />
+                            )}
+                            <span className="truncate">{l.label || l.interface}</span>
+                            {pinned && <Pin className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />}
+                          </span>
+                          <span
+                            className={
+                              'text-[11px] tabular-nums font-normal ' +
+                              (probe
+                                ? probe.alive
+                                  ? 'text-green-500'
+                                  : 'text-red-500'
+                                : 'text-muted-foreground')
+                            }
+                          >
+                            {probe ? (probe.alive ? `${probe.pingMs} ms` : 'unreachable') : '—'}
+                          </span>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  {isAuto && g.lastAutoReason && (
+                    <p className="text-[10px] text-muted-foreground">{g.lastAutoReason}</p>
                   )}
                 </div>
-                <div className="flex gap-1.5">
-                  <Button
-                    size="sm"
-                    variant={g.mode !== 'manual' ? 'default' : 'outline'}
-                    className="h-6 flex-1 px-2 text-[11px]"
-                    disabled={disabled || cdnSwitching}
-                    onClick={() => handleCdnSwitch(g, 'auto', 'Auto')}
-                  >
-                    Auto
-                  </Button>
-                  {links.map((l) => {
-                    const dead = l.status !== 'bound' || !l.alive;
-                    const current = g.interface === l.interface;
-                    return (
-                      <Button
-                        key={l.interface}
-                        size="sm"
-                        variant={g.mode === 'manual' && current ? 'default' : 'outline'}
-                        className="h-6 flex-1 px-2 text-[11px]"
-                        disabled={disabled || cdnSwitching || dead}
-                        title={dead ? 'Line has no internet' : undefined}
-                        onClick={() => handleCdnSwitch(g, l.interface, l.label || l.interface)}
-                      >
-                        {g.mode !== 'manual' && current && (
-                          <span className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500" />
-                        )}
-                        {l.label || l.interface}
-                      </Button>
-                    );
-                  })}
-                </div>
-                {g.mode !== 'manual' && g.lastAutoReason && (
-                  <p className="text-[10px] text-muted-foreground truncate">{g.lastAutoReason}</p>
-                )}
-              </div>
-            ))}
+              );
+            })}
             <p className="text-[10px] text-muted-foreground">
-              Auto escapes a dead path in ~2 min; pinned groups fall back only if the line drops.
+              Auto escapes a dead path in ~2 min · a pinned line falls back only if it drops entirely
             </p>
           </div>
         )}
