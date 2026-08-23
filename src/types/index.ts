@@ -63,16 +63,21 @@ export interface WANLink {
   lastTestAt?: string;   // RFC3339
 }
 
-// Where the CDN destination routes (Cloudflare + Google/YouTube) exit
-export interface CDNSteering {
+// Per-group CDN steering state (cloudflare / google), independently steered
+export interface CDNGroupStatus {
+  group: string; // "cloudflare" | "google"
   interface: string;
   label?: string;
   routes: number;
   active: number;
-  mode?: 'auto' | 'manual';
+  mode: 'auto' | 'manual';
   health?: CFHealth[];
   lastAutoFlip?: string;
   lastAutoReason?: string;
+}
+
+export interface CDNSteering {
+  groups: CDNGroupStatus[];
 }
 
 // Per-uplink Cloudflare reachability, probed through that line

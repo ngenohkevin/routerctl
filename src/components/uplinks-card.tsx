@@ -18,7 +18,12 @@ import {
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { timeAgo } from '@/components/device-detail-dialog';
-import type { WANLink, CDNSteering } from '@/types';
+import type { WANLink, CDNSteering, CDNGroupStatus } from '@/types';
+
+const GROUP_TITLES: Record<string, string> = {
+  cloudflare: 'Cloudflare',
+  google: 'YouTube · Google',
+};
 
 interface UplinksCardProps {
   /** When provided, each link gets a "Test" button that measures that line. */
@@ -63,17 +68,17 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
     if (refreshToken) fetchLinks();
   }, [refreshToken, fetchLinks]);
 
-  const handleCdnSwitch = async (iface: string, name: string) => {
-    if (!cdn) return;
-    const isAuto = cdn.mode !== 'manual';
-    if (iface === 'auto' ? isAuto : !isAuto && cdn.interface === iface) return;
+  const handleCdnSwitch = async (g: CDNGroupStatus, iface: string, name: string) => {
+    const isAuto = g.mode !== 'manual';
+    if (iface === 'auto' ? isAuto : !isAuto && g.interface === iface) return;
     setCdnSwitching(true);
     try {
-      await api.setCdnSteering(iface);
+      await api.setCdnSteering(iface, g.group);
+      const title = GROUP_TITLES[g.group] || g.group;
       toast.success(
         iface === 'auto'
-          ? 'CDN routing is automatic — best Cloudflare path wins'
-          : `Cloudflare + YouTube pinned to ${name}`
+          ? `${title} routing is automatic — healthiest path wins`
+          : `${title} pinned to ${name}`
       );
       api.getCdnSteering().then(setCdn).catch(() => null);
     } catch {
@@ -218,71 +223,67 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
             </div>
           );
         })}
-        {cdn && cdn.routes > 0 && links.length > 1 && (
-          <div className="rounded-lg border border-border/60 p-3 space-y-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-medium">CDN traffic</span>
-              <span className="text-[10px] text-muted-foreground">Cloudflare · YouTube</span>
-            </div>
-            <div className="flex gap-1.5">
-              <Button
-                size="sm"
-                variant={cdn.mode !== 'manual' ? 'default' : 'outline'}
-                className="h-7 flex-1 px-2 text-xs"
-                disabled={disabled || cdnSwitching}
-                onClick={() => handleCdnSwitch('auto', 'Auto')}
-              >
-                Auto
-              </Button>
-              {links.map((l) => {
-                const dead = l.status !== 'bound' || !l.alive;
-                const current = cdn.interface === l.interface;
-                return (
+        {cdn && cdn.groups.some((g) => g.routes > 0) && links.length > 1 && (
+          <div className="rounded-lg border border-border/60 p-3 space-y-3">
+            <span className="text-sm font-medium">CDN traffic</span>
+            {cdn.groups.filter((g) => g.routes > 0).map((g) => (
+              <div key={g.group} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">{GROUP_TITLES[g.group] || g.group}</span>
+                  {g.health && g.health.length > 0 && (
+                    <span className="text-[10px] text-muted-foreground tabular-nums truncate">
+                      {g.health.map((hh, i) => (
+                        <span key={hh.interface}>
+                          {i > 0 && ' · '}
+                          {hh.label || hh.interface}{' '}
+                          {hh.alive ? (
+                            <span className="text-green-500">{hh.pingMs} ms</span>
+                          ) : (
+                            <span className="text-red-500">✗</span>
+                          )}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-1.5">
                   <Button
-                    key={l.interface}
                     size="sm"
-                    variant={cdn.mode === 'manual' && current ? 'default' : 'outline'}
-                    className="h-7 flex-1 px-2 text-xs"
-                    disabled={disabled || cdnSwitching || dead}
-                    title={dead ? 'Line has no internet' : undefined}
-                    onClick={() => handleCdnSwitch(l.interface, l.label || l.interface)}
+                    variant={g.mode !== 'manual' ? 'default' : 'outline'}
+                    className="h-6 flex-1 px-2 text-[11px]"
+                    disabled={disabled || cdnSwitching}
+                    onClick={() => handleCdnSwitch(g, 'auto', 'Auto')}
                   >
-                    {cdnSwitching ? (
-                      <RefreshCw className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <>
-                        {cdn.mode !== 'manual' && current && (
+                    Auto
+                  </Button>
+                  {links.map((l) => {
+                    const dead = l.status !== 'bound' || !l.alive;
+                    const current = g.interface === l.interface;
+                    return (
+                      <Button
+                        key={l.interface}
+                        size="sm"
+                        variant={g.mode === 'manual' && current ? 'default' : 'outline'}
+                        className="h-6 flex-1 px-2 text-[11px]"
+                        disabled={disabled || cdnSwitching || dead}
+                        title={dead ? 'Line has no internet' : undefined}
+                        onClick={() => handleCdnSwitch(g, l.interface, l.label || l.interface)}
+                      >
+                        {g.mode !== 'manual' && current && (
                           <span className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500" />
                         )}
                         {l.label || l.interface}
-                      </>
-                    )}
-                  </Button>
-                );
-              })}
-            </div>
-            {cdn.health && cdn.health.length > 0 && (
-              <p className="text-[10px] text-muted-foreground tabular-nums">
-                Cloudflare:{' '}
-                {cdn.health.map((hh, i) => (
-                  <span key={hh.interface}>
-                    {i > 0 && ' · '}
-                    {hh.label || hh.interface}{' '}
-                    {hh.alive ? (
-                      <span className="text-green-500">{hh.pingMs} ms</span>
-                    ) : (
-                      <span className="text-red-500">unreachable</span>
-                    )}
-                  </span>
-                ))}
-              </p>
-            )}
+                      </Button>
+                    );
+                  })}
+                </div>
+                {g.mode !== 'manual' && g.lastAutoReason && (
+                  <p className="text-[10px] text-muted-foreground truncate">{g.lastAutoReason}</p>
+                )}
+              </div>
+            ))}
             <p className="text-[10px] text-muted-foreground">
-              {cdn.mode !== 'manual'
-                ? cdn.lastAutoReason
-                  ? `auto · last change: ${cdn.lastAutoReason}`
-                  : 'auto · healthiest Cloudflare path wins; escapes a dead path in ~2 min'
-                : `pinned · ${cdn.active < cdn.routes ? `${cdn.routes - cdn.active}/${cdn.routes} routes on fallback` : 'auto-falls back only if the line drops entirely'}`}
+              Auto escapes a dead path in ~2 min; pinned groups fall back only if the line drops.
             </p>
           </div>
         )}

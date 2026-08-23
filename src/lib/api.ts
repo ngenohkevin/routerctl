@@ -490,10 +490,10 @@ export const api = {
     return fetchApi<CDNSteering>('/wan/cdn');
   },
 
-  async setCdnSteering(iface: string): Promise<{ message: string }> {
+  async setCdnSteering(iface: string, group?: string): Promise<{ message: string }> {
     return fetchApi<{ message: string }>('/wan/cdn', {
       method: 'POST',
-      body: JSON.stringify({ interface: iface }),
+      body: JSON.stringify({ interface: iface, group }),
     });
   },
 
