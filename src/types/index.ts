@@ -69,6 +69,18 @@ export interface CDNSteering {
   label?: string;
   routes: number;
   active: number;
+  mode?: 'auto' | 'manual';
+  health?: CFHealth[];
+  lastAutoFlip?: string;
+  lastAutoReason?: string;
+}
+
+// Per-uplink Cloudflare reachability, probed through that line
+export interface CFHealth {
+  interface: string;
+  label?: string;
+  alive: boolean;
+  pingMs?: number;
 }
 
 export interface SystemInfo {

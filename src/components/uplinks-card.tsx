@@ -63,12 +63,18 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
     if (refreshToken) fetchLinks();
   }, [refreshToken, fetchLinks]);
 
-  const handleCdnSwitch = async (l: WANLink) => {
-    if (!cdn || cdn.interface === l.interface) return;
+  const handleCdnSwitch = async (iface: string, name: string) => {
+    if (!cdn) return;
+    const isAuto = cdn.mode !== 'manual';
+    if (iface === 'auto' ? isAuto : !isAuto && cdn.interface === iface) return;
     setCdnSwitching(true);
     try {
-      await api.setCdnSteering(l.interface);
-      toast.success(`Cloudflare + YouTube now via ${l.label || l.interface}`);
+      await api.setCdnSteering(iface);
+      toast.success(
+        iface === 'auto'
+          ? 'CDN routing is automatic — best Cloudflare path wins'
+          : `Cloudflare + YouTube pinned to ${name}`
+      );
       api.getCdnSteering().then(setCdn).catch(() => null);
     } catch {
       toast.error('Failed to switch CDN routing');
@@ -219,31 +225,64 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
               <span className="text-[10px] text-muted-foreground">Cloudflare · YouTube</span>
             </div>
             <div className="flex gap-1.5">
+              <Button
+                size="sm"
+                variant={cdn.mode !== 'manual' ? 'default' : 'outline'}
+                className="h-7 flex-1 px-2 text-xs"
+                disabled={disabled || cdnSwitching}
+                onClick={() => handleCdnSwitch('auto', 'Auto')}
+              >
+                Auto
+              </Button>
               {links.map((l) => {
                 const dead = l.status !== 'bound' || !l.alive;
+                const current = cdn.interface === l.interface;
                 return (
                   <Button
                     key={l.interface}
                     size="sm"
-                    variant={cdn.interface === l.interface ? 'default' : 'outline'}
+                    variant={cdn.mode === 'manual' && current ? 'default' : 'outline'}
                     className="h-7 flex-1 px-2 text-xs"
                     disabled={disabled || cdnSwitching || dead}
                     title={dead ? 'Line has no internet' : undefined}
-                    onClick={() => handleCdnSwitch(l)}
+                    onClick={() => handleCdnSwitch(l.interface, l.label || l.interface)}
                   >
-                    {cdnSwitching && cdn.interface !== l.interface ? (
+                    {cdnSwitching ? (
                       <RefreshCw className="h-3 w-3 animate-spin" />
                     ) : (
-                      l.label || l.interface
+                      <>
+                        {cdn.mode !== 'manual' && current && (
+                          <span className="mr-1 h-1.5 w-1.5 rounded-full bg-green-500" />
+                        )}
+                        {l.label || l.interface}
+                      </>
                     )}
                   </Button>
                 );
               })}
             </div>
+            {cdn.health && cdn.health.length > 0 && (
+              <p className="text-[10px] text-muted-foreground tabular-nums">
+                Cloudflare:{' '}
+                {cdn.health.map((hh, i) => (
+                  <span key={hh.interface}>
+                    {i > 0 && ' · '}
+                    {hh.label || hh.interface}{' '}
+                    {hh.alive ? (
+                      <span className="text-green-500">{hh.pingMs} ms</span>
+                    ) : (
+                      <span className="text-red-500">unreachable</span>
+                    )}
+                  </span>
+                ))}
+              </p>
+            )}
             <p className="text-[10px] text-muted-foreground">
-              {cdn.active < cdn.routes
-                ? `${cdn.routes - cdn.active}/${cdn.routes} routes on fallback — chosen line has no internet`
-                : `${cdn.routes} destinations pinned · auto-falls back if the line drops`}
+              {cdn.mode !== 'manual'
+                ? cdn.lastAutoReason
+                  ? `auto · last change: ${cdn.lastAutoReason}`
+                  : 'auto · healthiest Cloudflare path wins; escapes a dead path in ~2 min'
+                : `pinned · ${cdn.active < cdn.routes ? `${cdn.routes - cdn.active}/${cdn.routes} routes on fallback` : 'auto-falls back only if the line drops entirely'}`}
             </p>
           </div>
         )}
