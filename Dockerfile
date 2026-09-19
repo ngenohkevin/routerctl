@@ -20,13 +20,11 @@ COPY . .
 # Uncomment to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build arguments for environment variables
-ARG AGENT_URL
-ARG AGENT_API_KEY
-
-ENV AGENT_URL=$AGENT_URL
-ENV AGENT_API_KEY=$AGENT_API_KEY
-
+# AGENT_URL and AGENT_API_KEY are deliberately NOT build args. Both are read
+# at runtime by dynamic route handlers (src/app/api/[...proxy], /api/auth/login),
+# so Dokploy supplies them as runtime env vars. Passing them at build time put
+# a router-control credential into builder-stage layers and the BuildKit cache
+# for no benefit, and tripped Docker's SecretsUsedInArgOrEnv check.
 RUN npm run build
 
 # Production image, copy all the files and run next
