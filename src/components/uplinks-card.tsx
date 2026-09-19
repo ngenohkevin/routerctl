@@ -18,12 +18,31 @@ import {
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { timeAgo } from '@/components/device-detail-dialog';
-import type { WANLink, CDNSteering, CDNGroupStatus } from '@/types';
+import type { WANLink, CDNSteering, CDNGroupStatus, CFHealth } from '@/types';
 
 const GROUP_TITLES: Record<string, string> = {
   cloudflare: 'Cloudflare',
   google: 'YouTube · Google',
 };
+
+const PROBE_TONE: Record<string, string> = {
+  up: 'text-green-500',
+  degraded: 'text-amber-500',
+  down: 'text-red-500',
+};
+
+const PROBE_TEXT: Record<string, string> = {
+  degraded: 'congested',
+  down: 'unreachable',
+};
+
+// The agent reports "degraded" when this line's own CDN probe timed out but
+// the line still answered another probe pinned to it — a saturated uplink,
+// not an outage. Agents predating that field only send `alive`.
+function probeState(p?: CFHealth): 'up' | 'degraded' | 'down' | undefined {
+  if (!p) return undefined;
+  return p.state ?? (p.alive ? 'up' : 'down');
+}
 
 interface UplinksCardProps {
   /** When provided, each link gets a "Test" button that measures that line. */
@@ -262,12 +281,19 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                       const carrying = g.interface === l.interface;
                       const pinned = !isAuto && carrying;
                       const probe = g.health?.find((hh) => hh.interface === l.interface);
+                      const st = probeState(probe);
                       return (
                         <Button
                           key={l.interface}
                           variant="outline"
                           disabled={disabled || cdnSwitching || dead}
-                          title={dead ? 'Line has no internet' : `Pin ${GROUP_TITLES[g.group] || g.group} to ${l.label || l.interface}`}
+                          title={
+                            dead
+                              ? 'Line has no internet'
+                              : st === 'degraded'
+                                ? `This line is up, but the ${GROUP_TITLES[g.group] || g.group} probe is timing out on it — usually congestion, not an outage`
+                                : `Pin ${GROUP_TITLES[g.group] || g.group} to ${l.label || l.interface}`
+                          }
                           onClick={() => handleCdnSwitch(g, l.interface, l.label || l.interface)}
                           className={
                             'h-auto flex-col items-start gap-0.5 px-2.5 py-1.5 ' +
@@ -286,14 +312,10 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                           <span
                             className={
                               'text-[11px] tabular-nums font-normal ' +
-                              (probe
-                                ? probe.alive
-                                  ? 'text-green-500'
-                                  : 'text-red-500'
-                                : 'text-muted-foreground')
+                              (st ? PROBE_TONE[st] : 'text-muted-foreground')
                             }
                           >
-                            {probe ? (probe.alive ? `${probe.pingMs} ms` : 'unreachable') : '—'}
+                            {st === 'up' ? `${probe?.pingMs} ms` : st ? PROBE_TEXT[st] : '—'}
                           </span>
                         </Button>
                       );

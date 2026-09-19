@@ -80,12 +80,16 @@ export interface CDNSteering {
   groups: CDNGroupStatus[];
 }
 
-// Per-uplink Cloudflare reachability, probed through that line
+// Per-uplink CDN-group reachability, probed through that line.
+// `state` distinguishes a congested line from a dead one: "degraded" means
+// this group's probe timed out but the line still answered another pinned
+// probe. `alive` remains the raw probe result (auto-steering uses it).
 export interface CFHealth {
   interface: string;
   label?: string;
   alive: boolean;
   pingMs?: number;
+  state?: 'up' | 'degraded' | 'down';
 }
 
 export interface SystemInfo {
