@@ -1,195 +1,138 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  RefreshCw, Play, Trash2, Radio,
-} from 'lucide-react';
+import { Play, Square, RefreshCw, Trash2, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { AppShell } from '@/components/shell/app-shell';
 import { PageHeader } from '@/components/shell/page-header';
-import { SpeedGauge } from '@/components/speed-gauge';
+import { Panel } from '@/components/shell/panel';
+import { Led } from '@/components/shell/led';
+import { SpeedGauge, type GaugeTone } from '@/components/speed-gauge';
 import { SpeedResultCards } from '@/components/speed-result-cards';
+import { SpeedTrace } from '@/components/speed-trace';
 import { LatencyTable } from '@/components/latency-table';
 import { SpeedHistoryChart } from '@/components/speed-history-chart';
+import { SpeedHistoryTable } from '@/components/speed-history-table';
 import { StreamingTest } from '@/components/streaming-test';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api, isAuthenticated } from '@/lib/api';
 import { UplinksCard } from '@/components/uplinks-card';
+import { api, isAuthenticated } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useSpeedTest, type SpeedTestState } from '@/hooks/use-speed-test';
 import { toast } from 'sonner';
 import type { NetSpeedTestResult, LatencyTarget, SpeedTestServer } from '@/types';
 
-type SpeedPhase = 'idle' | 'ping' | 'download' | 'upload' | 'done';
+type Tab = 'speedtest' | 'streaming' | 'latency' | 'history';
+
+/** What the gauge shows for each state of the test. */
+function gaugeView(s: SpeedTestState): { value: number | null; mode: 'speed' | 'ping'; tone: GaugeTone; caption: string } {
+  if (s.status === 'running') {
+    switch (s.phase) {
+      case 'download':
+        return { value: s.live, mode: 'speed', tone: 'link', caption: 'Download' };
+      case 'upload':
+        return { value: s.live, mode: 'speed', tone: 'air', caption: 'Upload' };
+      case 'ping':
+        return { value: s.live > 0 ? s.live : null, mode: 'ping', tone: 'ink', caption: 'Ping' };
+      default:
+        return { value: null, mode: 'ping', tone: 'ink', caption: 'Preparing' };
+    }
+  }
+  if (s.status === 'done' && s.download != null) {
+    return { value: s.download, mode: 'speed', tone: 'link', caption: 'Download' };
+  }
+  const caption = s.status === 'cancelled' ? 'Cancelled' : s.status === 'error' ? 'Failed' : 'Ready';
+  return { value: null, mode: 'speed', tone: 'ink', caption };
+}
+
+/** One line under the gauge saying what is happening, in plain words. */
+function statusLine(s: SpeedTestState): { text: string; tone?: 'fault' } {
+  const where = s.server ? `${s.server.sponsor}, ${s.server.name}` : null;
+  switch (s.status) {
+    case 'running':
+      switch (s.phase) {
+        case 'ping':
+          return { text: where ? `Measuring ping to ${where}` : 'Measuring ping…' };
+        case 'download':
+          return { text: where ? `Downloading from ${where}` : 'Testing download…' };
+        case 'upload':
+          return { text: where ? `Uploading to ${where}` : 'Testing upload…' };
+        default:
+          return { text: s.message ?? 'Starting…' };
+      }
+    case 'done':
+      return {
+        text: s.server
+          ? `${s.server.sponsor}, ${s.server.name} · ${s.server.distance} km`
+          : 'Finished',
+      };
+    case 'error':
+      return { text: s.error ?? 'Speed test failed', tone: 'fault' };
+    case 'cancelled':
+      return { text: 'Cancelled — nothing was saved' };
+    default:
+      return { text: 'Tests the line the router is using now. To test one line on its own, use Test on the right.' };
+  }
+}
 
 export default function SpeedTestPage() {
   const router = useRouter();
+  const [tab, setTab] = useState<Tab>('speedtest');
 
-  // Speed test state
-  const [phase, setPhase] = useState<SpeedPhase>('idle');
-  const [gaugeValue, setGaugeValue] = useState(0);
-  const [gaugePing, setGaugePing] = useState(0);
-  const [gaugeLabel, setGaugeLabel] = useState('Ready');
-  const [lastResult, setLastResult] = useState<NetSpeedTestResult | null>(null);
-
-  // Progressive result cards — show each metric as its phase completes
-  const [cardPing, setCardPing] = useState<number | null>(null);
-  const [cardJitter, setCardJitter] = useState<number | null>(null);
-  const [cardDownload, setCardDownload] = useState<number | null>(null);
-  const [cardUpload, setCardUpload] = useState<number | null>(null);
-  const [isp, setIsp] = useState<string | null>(null);
-  // Which uplink the current/last test ran through ("Faiba", "Vilcom")
-  const [testedLine, setTestedLine] = useState<string | null>(null);
-  // Bumped when a test completes so the uplinks rail refreshes instantly
-  const [uplinkRefresh, setUplinkRefresh] = useState(0);
-
-  // Latency state
-  const [latencyTargets, setLatencyTargets] = useState<LatencyTarget[]>([]);
-  const [latencyLoading, setLatencyLoading] = useState(false);
-
-  // History state
+  // History (shared by the History tab and the post-test refresh)
   const [history, setHistory] = useState<NetSpeedTestResult[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
-  // Server selection ('' = auto-pick nearest by latency, the backend default)
+  // Server choice ('' = auto-pick nearest by latency, the agent's default)
   const [servers, setServers] = useState<SpeedTestServer[]>([]);
-  const [selectedServerID, setSelectedServerID] = useState<string>('');
-  const [serversLoading, setServersLoading] = useState(false);
+  const [serverID, setServerID] = useState('');
 
-  const cleanupRef = useRef<(() => void) | null>(null);
+  const [latencyTargets, setLatencyTargets] = useState<LatencyTarget[]>([]);
+  const [latencyLoading, setLatencyLoading] = useState(false);
 
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      router.push('/login');
-    }
-  }, [router]);
+  // Bumped when a test completes so the uplinks rail refreshes at once
+  const [uplinkRefresh, setUplinkRefresh] = useState(0);
+  const [streamingRunning, setStreamingRunning] = useState(false);
 
-  useEffect(() => {
-    fetchHistory();
-    loadServers();
-  }, []);
-
-  const loadServers = async () => {
-    setServersLoading(true);
-    try {
-      const res = await api.listSpeedTestServers();
-      setServers(res.servers || []);
-    } catch {
-      // Non-fatal — auto-pick still works without an explicit list.
-      setServers([]);
-    } finally {
-      setServersLoading(false);
-    }
-  };
-
-  // Cleanup SSE on unmount
-  useEffect(() => {
-    return () => {
-      if (cleanupRef.current) cleanupRef.current();
-    };
-  }, []);
-
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
       const res = await api.getSpeedTestHistory(50);
       setHistory(res.results || []);
     } catch {
-      // Silently handle — may not have history yet
       setHistory([]);
     } finally {
       setHistoryLoading(false);
     }
-  };
+  }, []);
 
-  const startSpeedTest = (wan?: string, wanLabel?: string) => {
-    if (phase !== 'idle' && phase !== 'done') return;
+  const onFinished = useCallback(() => {
+    fetchHistory();
+    setUplinkRefresh((n) => n + 1);
+  }, [fetchHistory]);
 
-    setLastResult(null);
-    setGaugeValue(0);
-    setGaugePing(0);
-    setPhase('ping');
-    setGaugeLabel(wanLabel ? `Measuring ping via ${wanLabel}...` : 'Measuring ping...');
-    setCardPing(null);
-    setCardJitter(null);
-    setCardDownload(null);
-    setCardUpload(null);
-    setIsp(null);
-    setTestedLine(wanLabel ?? null);
+  const { state, start, cancel, running } = useSpeedTest(onFinished);
 
-    let pingDone = false;
-    let downloadDone = false;
-    let lastDownload = 0;
+  useEffect(() => {
+    if (!isAuthenticated()) router.push('/login');
+  }, [router]);
 
-    const cleanup = api.runNetSpeedTest(selectedServerID || undefined, (ev) => {
-      // ISP is sent from the ping phase onward; latch it as soon as it arrives.
-      if (ev.isp) setIsp(ev.isp);
-      if (ev.phase === 'setup') {
-        // Narrated pre-test stages (routing switch, server discovery) — keep
-        // the pulsing gauge alive with a live label instead of a frozen one.
-        setPhase('ping');
-        if (ev.message) setGaugeLabel(ev.message);
-        return;
-      }
-      if (ev.phase === 'ping') {
-        setPhase('ping');
-        if (ev.ping > 0) {
-          setGaugePing(ev.ping);
-          setGaugeLabel(wanLabel ? `Measuring ping via ${wanLabel}...` : 'Measuring ping...');
-        }
-      } else if (ev.phase === 'download') {
-        // Ping just finished — lock in ping/jitter cards
-        if (!pingDone) {
-          pingDone = true;
-          setCardPing(ev.ping);
-          setCardJitter(ev.jitter);
-        }
-        setPhase('download');
-        setGaugeLabel(wanLabel ? `Testing download via ${wanLabel}...` : 'Testing download...');
-        // Capture every event's speed (including the final 0 from done),
-        // so the download card never displays 0 Mbps just because the last
-        // tick was a phase boundary.
-        setGaugeValue(ev.speed);
-        if (ev.speed > 0) {
-          lastDownload = ev.speed;
-        }
-      } else if (ev.phase === 'upload') {
-        // Download just finished — lock in download card
-        if (!downloadDone) {
-          downloadDone = true;
-          setCardDownload(lastDownload);
-        }
-        setPhase('upload');
-        setGaugeLabel(wanLabel ? `Testing upload via ${wanLabel}...` : 'Testing upload...');
-        if (ev.speed > 0) {
-          setGaugeValue(ev.speed);
-        }
-      } else if (ev.phase === 'done' && ev.result) {
-        setLastResult(ev.result);
-        setCardPing(ev.result.ping);
-        setCardJitter(ev.result.jitter);
-        setCardDownload(ev.result.download);
-        setCardUpload(ev.result.upload);
-        setGaugeValue(ev.result.download);
-        setGaugeLabel(`${ev.result.server.sponsor} — ${ev.result.server.name}`);
-        // Auto tests learn their line from the agent (the current primary)
-        setTestedLine(ev.result.wanLabel || wanLabel || null);
-        setPhase('done');
-        fetchHistory();
-        setUplinkRefresh((n) => n + 1);
-      } else if (ev.phase === 'error') {
-        setPhase('idle');
-        setGaugeValue(0);
-        setGaugeLabel('Ready');
-        toast.error(ev.error || 'Speed test failed');
-      }
-    }, wan);
+  useEffect(() => {
+    fetchHistory();
+    api.listSpeedTestServers().then((r) => setServers(r.servers || [])).catch(() => setServers([]));
+  }, [fetchHistory]);
 
-    cleanupRef.current = cleanup;
+  useEffect(() => {
+    if (state.status === 'error' && state.error) toast.error(state.error);
+  }, [state.status, state.error]);
+
+  const run = (wan?: string, line?: string) => {
+    if (running || streamingRunning) return;
+    start({ serverID: serverID || undefined, wan, line });
   };
 
   const runLatencyTest = async () => {
@@ -214,10 +157,8 @@ export default function SpeedTestPage() {
     }
   };
 
-  const isRunning = phase !== 'idle' && phase !== 'done';
-  const gaugeMax = lastResult
-    ? Math.max(lastResult.download, lastResult.upload) * 1.2
-    : 100;
+  const gauge = gaugeView(state);
+  const status = statusLine(state);
 
   return (
     <AppShell>
@@ -227,213 +168,153 @@ export default function SpeedTestPage() {
           description="Measured from the Raspberry Pi — test either line on its own, check streaming, latency and history."
         />
 
-        {/* Tabs */}
-        <Tabs defaultValue="speedtest">
-          <TabsList className="grid h-10 w-full grid-cols-4 border border-hairline bg-inset p-0.5 md:w-auto md:inline-grid">
-            <TabsTrigger value="speedtest">Speed Test</TabsTrigger>
-            <TabsTrigger value="streaming">Streaming</TabsTrigger>
+        {/* Every tab stays mounted: switching away must not kill a running test. */}
+        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-6">
+          <TabsList className="grid h-10 w-full grid-cols-4 md:inline-grid md:w-auto">
+            <TabsTrigger value="speedtest" className="gap-1.5">
+              Speed Test
+              {running && tab !== 'speedtest' && <Led tone="link" live label="Running" />}
+            </TabsTrigger>
+            <TabsTrigger value="streaming" className="gap-1.5">
+              Streaming
+              {streamingRunning && tab !== 'streaming' && <Led tone="link" live label="Running" />}
+            </TabsTrigger>
             <TabsTrigger value="latency">Latency</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 
-          {/* Speed Test Tab — test stage (focal) + lines rail */}
-          <TabsContent value="speedtest" className="space-y-6">
+          <TabsContent value="speedtest" forceMount className="space-y-6 data-[state=inactive]:hidden">
             <div className="grid gap-6 lg:grid-cols-3">
-              <Card className="lg:col-span-2">
-                <CardContent className="pt-8 pb-6 h-full flex flex-col items-center justify-center gap-6">
-                  <SpeedGauge
-                    value={gaugeValue}
-                    max={gaugeMax}
-                    label={gaugeLabel}
-                    phase={phase}
-                    ping={gaugePing}
-                  />
-                  <div className="flex flex-col items-center gap-3 w-full max-w-sm">
-                    <Button
-                      size="lg"
-                      onClick={() => startSpeedTest()}
-                      disabled={isRunning}
-                      className="gap-2 w-full sm:w-auto sm:px-10"
-                    >
-                      {isRunning ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                          Testing...
-                        </>
+              <Panel className="flex flex-col items-center justify-center gap-5 lg:col-span-2">
+                {/* Which line, as the internet sees it */}
+                <div className="flex min-h-5 w-full items-center justify-between gap-3 text-xs text-ink-3">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Led
+                      tone={running ? 'link' : state.status === 'error' ? 'fault' : state.status === 'done' ? 'link' : 'off'}
+                      live={running}
+                      label={running ? 'Test running' : 'Idle'}
+                    />
+                    <span className="truncate">
+                      {state.line ? (
+                        <>Via <span className="font-medium text-ink">{state.line}</span></>
+                      ) : running ? (
+                        'Via the current primary line'
                       ) : (
-                        <>
-                          <Play className="h-4 w-4" />
-                          Run Speed Test
-                        </>
+                        'Ready'
                       )}
-                    </Button>
-                    <Select
-                      value={selectedServerID || 'auto'}
-                      onValueChange={(v) => setSelectedServerID(v === 'auto' ? '' : v)}
-                      disabled={isRunning}
-                    >
-                      <SelectTrigger
-                        className="w-full h-8 text-xs text-muted-foreground border-border/60"
-                        aria-label="Speed test server"
-                      >
-                        <SelectValue placeholder="Auto (nearest server)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">Auto (nearest server)</SelectItem>
-                        {servers.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.sponsor} — {s.name}, {s.country} ({s.distance} km)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {serversLoading && (
-                      <p className="text-[10px] text-muted-foreground">Loading nearby servers…</p>
-                    )}
-                  </div>
-                  {(testedLine || isp || lastResult) && (
-                    <div className="text-xs text-muted-foreground text-center space-y-0.5">
-                      {testedLine && (
-                        <p>Line: <span className="text-foreground font-medium">{testedLine}</span></p>
-                      )}
-                      {isp && (
-                        <p className="text-[10px]">egress seen as {isp}</p>
-                      )}
-                      {lastResult && (
-                        <p>
-                          {lastResult.server.sponsor} ({lastResult.server.name}) — {lastResult.server.distance} km
-                        </p>
-                      )}
-                    </div>
+                      {state.isp && <span className="text-ink-4"> · seen as {state.isp}</span>}
+                    </span>
+                  </span>
+                  {state.jitter != null && state.status === 'done' && (
+                    <span className="num shrink-0 font-mono text-ink-4">jitter {state.jitter.toFixed(1)} ms</span>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+
+                <SpeedGauge value={gauge.value} mode={gauge.mode} tone={gauge.tone} caption={gauge.caption} />
+
+                <p
+                  className={cn(
+                    'min-h-5 max-w-md text-center text-sm',
+                    status.tone === 'fault' ? 'text-fault' : 'text-ink-2'
+                  )}
+                  aria-live="polite"
+                >
+                  {status.text}
+                </p>
+
+                <SpeedTrace download={state.trace.download} upload={state.trace.upload} phase={state.phase} />
+
+                <div className="flex w-full max-w-sm flex-col items-stretch gap-2.5">
+                  {running ? (
+                    <Button size="lg" variant="outline" onClick={cancel} className="gap-2 border-hairline-strong">
+                      <Square className="size-3.5 fill-current" />
+                      Cancel test
+                    </Button>
+                  ) : (
+                    <Button size="lg" onClick={() => run()} disabled={streamingRunning} className="gap-2">
+                      <Play className="size-4" />
+                      {state.status === 'idle' ? 'Run speed test' : 'Run again'}
+                    </Button>
+                  )}
+                  <Select
+                    value={serverID || 'auto'}
+                    onValueChange={(v) => setServerID(v === 'auto' ? '' : v)}
+                    disabled={running}
+                  >
+                    <SelectTrigger className="h-8 w-full text-xs text-ink-3" aria-label="Speed test server">
+                      <SelectValue placeholder="Nearest server (auto)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Nearest server (auto)</SelectItem>
+                      {servers.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.sponsor} — {s.name}, {s.country} ({s.distance} km)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {streamingRunning && (
+                    <p className="text-center text-xs text-ink-3">A streaming test is running — one test at a time.</p>
+                  )}
+                </div>
+              </Panel>
 
               <UplinksCard
-                onTest={(iface, label) => startSpeedTest(iface, label)}
+                onTest={(iface, label) => run(iface, label)}
                 allowSetPrimary
-                disabled={isRunning}
+                disabled={running || streamingRunning}
                 refreshToken={uplinkRefresh}
               />
             </div>
 
-            <SpeedResultCards
-              ping={cardPing}
-              jitter={cardJitter}
-              download={cardDownload}
-              upload={cardUpload}
-              phase={phase}
+            {state.status !== 'idle' && <SpeedResultCards state={state} />}
+          </TabsContent>
+
+          <TabsContent value="streaming" forceMount className="data-[state=inactive]:hidden">
+            <StreamingTest
+              lastDownloadFromSpeedTest={state.download}
+              blocked={running}
+              onRunningChange={setStreamingRunning}
             />
           </TabsContent>
 
-          {/* Latency Tab */}
-          <TabsContent value="latency" className="space-y-6">
-            <div className="flex justify-between items-center">
+          <TabsContent value="latency" className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold">Multi-Target Latency</h2>
-                <p className="text-sm text-muted-foreground">
-                  TCP connect latency to local and external hosts
-                </p>
+                <h2 className="text-lg font-semibold text-ink">Latency</h2>
+                <p className="text-sm text-ink-3">Handshake time to local and internet hosts.</p>
               </div>
               <Button onClick={runLatencyTest} disabled={latencyLoading} className="gap-2">
-                {latencyLoading ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    Testing...
-                  </>
-                ) : (
-                  <>
-                    <Radio className="h-4 w-4" />
-                    Run Latency Test
-                  </>
-                )}
+                {latencyLoading ? <RefreshCw className="size-4 animate-spin" /> : <Radio className="size-4" />}
+                {latencyLoading ? 'Testing…' : 'Run latency test'}
               </Button>
             </div>
-
             <LatencyTable targets={latencyTargets} isLoading={latencyLoading} />
           </TabsContent>
 
-          {/* History Tab */}
-          <TabsContent value="history" className="space-y-6">
-            <div className="flex justify-between items-center">
+          <TabsContent value="history" className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold">Test History</h2>
-                <p className="text-sm text-muted-foreground">
+                <h2 className="text-lg font-semibold text-ink">History</h2>
+                <p className="text-sm text-ink-3">
                   {history.length} result{history.length !== 1 ? 's' : ''} saved
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={fetchHistory} className="gap-1">
-                  <RefreshCw className="h-3.5 w-3.5" />
+                <Button variant="outline" size="sm" onClick={fetchHistory} className="gap-1.5">
+                  <RefreshCw className="size-3.5" />
                   Refresh
                 </Button>
                 {history.length > 0 && (
-                  <Button variant="destructive" size="sm" onClick={clearHistory} className="gap-1">
-                    <Trash2 className="h-3.5 w-3.5" />
+                  <Button variant="outline" size="sm" onClick={clearHistory} className="gap-1.5 text-fault hover:text-fault">
+                    <Trash2 className="size-3.5" />
                     Clear
                   </Button>
                 )}
               </div>
             </div>
-
             <SpeedHistoryChart results={history} isLoading={historyLoading} />
-
-            {/* History Table */}
-            {history.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Results</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Line</TableHead>
-                        <TableHead>Server</TableHead>
-                        <TableHead>Download</TableHead>
-                        <TableHead>Upload</TableHead>
-                        <TableHead>Ping</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {history.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell className="text-xs">
-                            {new Date(r.timestamp).toLocaleString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            <span className="text-foreground font-medium">{r.wanLabel || r.isp || '—'}</span>
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {r.server.sponsor}
-                          </TableCell>
-                          <TableCell className="font-mono text-green-500">
-                            {r.download.toFixed(1)}
-                          </TableCell>
-                          <TableCell className="font-mono text-blue-500">
-                            {r.upload.toFixed(1)}
-                          </TableCell>
-                          <TableCell className="font-mono">
-                            {r.ping.toFixed(1)} ms
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          {/* Streaming Tab */}
-          <TabsContent value="streaming" className="space-y-6">
-            <StreamingTest lastDownloadFromSpeedTest={lastResult?.download ?? null} />
+            <SpeedHistoryTable results={history} />
           </TabsContent>
         </Tabs>
       </div>

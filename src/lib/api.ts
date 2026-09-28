@@ -21,7 +21,8 @@ import type {
   SpeedTestServer,
   LatencyResult,
   StreamingTestResult,
-  StreamingCDN,
+  SpeedProgressEvent,
+  StreamingProgressEvent,
   WANLink,
   CDNSteering,
   WANFailoverStatus,
@@ -122,6 +123,106 @@ export interface LoginResponse {
   token: string;
   expiresAt: number;
   username: string;
+}
+
+/**
+ * Read a test's server-sent event stream over fetch (EventSource can't send
+ * the Authorization header). Events are parsed across chunk boundaries —
+ * a `data:` line and its closing blank line often arrive in different reads —
+ * and `:` heartbeat comments are ignored. If the stream ends without a
+ * terminal event ("done"/"error") the caller gets an error event, so the UI
+ * never sits on a test that silently died. Returns an abort function.
+ */
+function streamTest<E extends { phase: string }>(
+  path: string,
+  onEvent: (event: E) => void,
+  fail: (message: string) => E
+): () => void {
+  const controller = new AbortController();
+
+  (async () => {
+    let finished = false;
+    const emit = (ev: E) => {
+      if (ev.phase === 'done' || ev.phase === 'error') finished = true;
+      onEvent(ev);
+    };
+
+    try {
+      const headers: Record<string, string> = { Accept: 'text/event-stream' };
+      const token = getToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      let response: Response | undefined;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        response = await fetch(`${API_BASE}${path}`, {
+          headers,
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        // 409 = a previous test (often one abandoned by a page refresh) is
+        // still releasing its lock. It clears within a couple of seconds
+        // now that client disconnects propagate, so wait and retry once.
+        if (response.status === 409 && attempt === 0) {
+          await new Promise((r) => setTimeout(r, 2500));
+          continue;
+        }
+        break;
+      }
+
+      if (response?.status === 401) {
+        removeToken();
+        window.location.href = loginUrlWithReturn();
+        return;
+      }
+      if (!response || !response.ok || !response.body) {
+        const err = (await response?.json().catch(() => null)) ?? {};
+        emit(fail(err.error || `Test failed (HTTP ${response?.status ?? '—'})`));
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let data: string[] = [];
+
+      const takeLine = (raw: string) => {
+        const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+        if (line === '') {
+          if (data.length) {
+            try {
+              emit(JSON.parse(data.join('\n')) as E);
+            } catch {
+              // Malformed event — skip it rather than end the test.
+            }
+            data = [];
+          }
+          return;
+        }
+        if (line.startsWith(':')) return; // heartbeat
+        if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        lines.forEach(takeLine);
+      }
+      buffer += decoder.decode();
+      if (buffer) takeLine(buffer);
+      takeLine(''); // flush an event the server closed without a blank line
+
+      if (!finished) emit(fail('The connection closed before the test finished'));
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError' && !finished) {
+        emit(fail('Connection to the agent was lost'));
+      }
+    }
+  })();
+
+  return () => controller.abort();
 }
 
 export const api = {
@@ -516,169 +617,29 @@ export const api = {
 
   runNetSpeedTest(
     serverID: string | undefined,
-    onProgress: (event: {
-      phase: string;
-      speed: number;
-      ping: number;
-      jitter: number;
-      server: SpeedTestServer;
-      isp?: string;
-      message?: string;
-      result?: NetSpeedTestResult;
-      error?: string;
-    }) => void,
+    onProgress: (event: SpeedProgressEvent) => void,
     wan?: string
   ): () => void {
-    const token = getToken();
     const params = new URLSearchParams();
     if (serverID) params.set('serverID', serverID);
     if (wan) params.set('wan', wan);
-
-    const controller = new AbortController();
-
-    (async () => {
-      try {
-        const headers: Record<string, string> = {
-          'Accept': 'text/event-stream',
-        };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        let response: Response | undefined;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          response = await fetch(`${API_BASE}/nettest/speedtest?${params.toString()}`, {
-            headers,
-            signal: controller.signal,
-            cache: 'no-store',
-          });
-          // 409 = a previous test (often one abandoned by a page refresh) is
-          // still releasing its lock. It clears within a couple of seconds
-          // now that client disconnects propagate, so wait and retry once.
-          if (response.status === 409 && attempt === 0) {
-            await new Promise((r) => setTimeout(r, 2500));
-            continue;
-          }
-          break;
-        }
-
-        if (!response || !response.ok || !response.body) {
-          const err = (await response?.json().catch(() => null)) ?? { error: 'Speed test failed' };
-          onProgress({ phase: 'error', speed: 0, ping: 0, jitter: 0, server: {} as SpeedTestServer, error: err.error });
-          return;
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          // Parse SSE events from buffer
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-          let dataLine = '';
-          for (const line of lines) {
-            if (line.startsWith('data:')) {
-              dataLine = line.slice(5).trim();
-            } else if (line === '' && dataLine) {
-              // Empty line = end of event
-              try {
-                const data = JSON.parse(dataLine);
-                onProgress(data);
-              } catch {}
-              dataLine = '';
-            }
-          }
-        }
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          onProgress({ phase: 'error', speed: 0, ping: 0, jitter: 0, server: {} as SpeedTestServer, error: 'Connection lost' });
-        }
-      }
-    })();
-
-    return () => controller.abort();
+    return streamTest<SpeedProgressEvent>(`/nettest/speedtest?${params}`, onProgress, (error) => ({
+      phase: 'error',
+      speed: 0,
+      ping: 0,
+      jitter: 0,
+      server: {} as SpeedTestServer,
+      error,
+    }));
   },
 
   // Streaming Quality Test (runs from Pi against Cloudflare + CDN probes)
-  runStreamingTest(
-    onProgress: (event: {
-      phase: string;
-      speed?: number;
-      latency?: number;
-      message?: string;
-      cdn?: StreamingCDN;
-      result?: StreamingTestResult;
-      error?: string;
-    }) => void,
-    wan?: string
-  ): () => void {
-    const token = getToken();
-    const controller = new AbortController();
-
-    (async () => {
-      try {
-        const headers: Record<string, string> = { Accept: 'text/event-stream' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const url = `${API_BASE}/nettest/streaming${wan ? `?wan=${encodeURIComponent(wan)}` : ''}`;
-        let response: Response | undefined;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          response = await fetch(url, {
-            headers,
-            signal: controller.signal,
-            cache: 'no-store',
-          });
-          // See runNetSpeedTest: wait out a stale lock from an abandoned test.
-          if (response.status === 409 && attempt === 0) {
-            await new Promise((r) => setTimeout(r, 2500));
-            continue;
-          }
-          break;
-        }
-
-        if (!response || !response.ok || !response.body) {
-          const err = (await response?.json().catch(() => null)) ?? { error: 'Streaming test failed' };
-          onProgress({ phase: 'error', error: err.error });
-          return;
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let dataLine = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            if (line.startsWith('data:')) {
-              dataLine = line.slice(5).trim();
-            } else if (line === '' && dataLine) {
-              try {
-                onProgress(JSON.parse(dataLine));
-              } catch {}
-              dataLine = '';
-            }
-          }
-        }
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          onProgress({ phase: 'error', error: 'Connection lost' });
-        }
-      }
-    })();
-
-    return () => controller.abort();
+  runStreamingTest(onProgress: (event: StreamingProgressEvent) => void, wan?: string): () => void {
+    const qs = wan ? `?wan=${encodeURIComponent(wan)}` : '';
+    return streamTest<StreamingProgressEvent>(`/nettest/streaming${qs}`, onProgress, (error) => ({
+      phase: 'error',
+      error,
+    }));
   },
 
   async runNetLatency(targets?: string[], count?: number): Promise<{ result: LatencyResult }> {

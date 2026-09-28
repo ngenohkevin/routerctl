@@ -369,6 +369,9 @@ export interface NetSpeedTestResult {
   upload: number;   // Mbps
   ping: number;     // ms
   jitter: number;   // ms
+  // Latency while the line is saturated (bufferbloat); absent on older results.
+  latencyDown?: number; // ms
+  latencyUp?: number;   // ms
   isp?: string;     // egress ISP as seen from the internet (may be a transit provider)
   wan?: string;     // uplink interface the test ran through ("WAN", "WAN2")
   wanLabel?: string; // human name of that uplink ("Faiba", "Vilcom")
@@ -387,6 +390,7 @@ export interface SpeedTestServer {
 export interface LatencyTarget {
   name: string;
   host: string;
+  line?: string;  // uplink a pinned probe address always leaves by; absent = current route
   ping: number;   // ms
   jitter: number; // ms
   loss: number;   // percentage
@@ -424,6 +428,34 @@ export interface StreamingTestResult {
   durationSeconds: number;
   wan?: string;      // uplink interface the test ran through
   wanLabel?: string; // human name of that uplink ("Faiba", "Vilcom")
+}
+
+/** One event from the speed test stream (/nettest/speedtest). */
+export interface SpeedProgressEvent {
+  phase: 'setup' | 'ping' | 'download' | 'upload' | 'done' | 'error';
+  speed: number;      // live Mbps over the last second; the phase result when `final`
+  progress?: number;  // 0..1 through the current phase
+  final?: boolean;    // closes a phase with its measured value
+  latency?: number;   // live latency under load (ms); the phase median when `final`
+  ping: number;       // ms — running median during ping, then the result
+  jitter: number;     // ms
+  server: SpeedTestServer;
+  isp?: string;
+  message?: string;   // "setup" stage description
+  result?: NetSpeedTestResult;
+  error?: string;
+}
+
+/** One event from the streaming test stream (/nettest/streaming). */
+export interface StreamingProgressEvent {
+  phase: 'cdn' | 'idle' | 'download' | 'bufferbloat' | 'done' | 'error';
+  speed?: number;
+  progress?: number;
+  latency?: number;
+  message?: string;
+  cdn?: StreamingCDN;
+  result?: StreamingTestResult;
+  error?: string;
 }
 
 export interface LatencyResult {

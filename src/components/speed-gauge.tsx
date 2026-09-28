@@ -1,207 +1,254 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { GAUGE_TICKS, formatMbps, formatMs, fromScale, toScale } from '@/lib/speed';
+
+export type GaugeTone = 'link' | 'air' | 'ink';
 
 interface SpeedGaugeProps {
-  value: number; // Mbps (or ms during ping)
-  max?: number;
-  label: string;
-  phase?: 'idle' | 'ping' | 'download' | 'upload' | 'done';
-  ping?: number; // ms — shown during ping phase
+  /** Mbps in speed mode, ms in ping mode; null shows a dash. */
+  value: number | null;
+  mode: 'speed' | 'ping';
+  tone: GaugeTone;
+  /** Short word under the figure: "Download", "Ping", "Ready". */
+  caption: string;
 }
 
-// Per-phase colour pairs [core, glow] used for the gradient arc + drop shadow.
-const PHASE_COLORS: Record<NonNullable<SpeedGaugeProps['phase']>, [string, string]> = {
-  download: ['hsl(142, 76%, 45%)', 'hsl(142, 76%, 36%)'],
-  upload: ['hsl(217, 91%, 65%)', 'hsl(217, 91%, 55%)'],
-  ping: ['hsl(45, 93%, 55%)', 'hsl(45, 93%, 47%)'],
-  done: ['hsl(142, 76%, 45%)', 'hsl(142, 76%, 36%)'],
-  idle: ['hsl(215, 20%, 55%)', 'hsl(215, 20%, 45%)'],
+const TONE_VAR: Record<GaugeTone, string> = {
+  link: 'var(--link)',
+  air: 'var(--air)',
+  ink: 'var(--ink-3)',
 };
 
-// useSmoothed eases a displayed number toward `target` every animation frame,
-// so the gauge reads continuously even though SSE values only arrive ~5x/sec.
-// `resetKey` snaps instantly (no cross-unit sweep) when the measured quantity
-// changes — e.g. ms during ping → Mbps during download.
-function useSmoothed(target: number, resetKey: string): number {
-  const [display, setDisplay] = useState(target);
-  const displayRef = useRef(target);
-  const keyRef = useRef(resetKey);
+// Geometry: a 270° arc opening at the bottom, in a 240×204 box.
+const CX = 120;
+const CY = 116;
+const R = 94;
+const START = 135; // degrees, clockwise from +x (SVG y points down)
+const SWEEP = 270;
 
-  useEffect(() => {
-    // Switching measured quantity (ping ms ↔ Mbps): snap the baseline so the
-    // loop settles to the new value next frame instead of sweeping across.
-    if (keyRef.current !== resetKey) {
-      keyRef.current = resetKey;
-      displayRef.current = target;
-    }
-
-    // The effect re-runs on every `target` change, so the captured value is
-    // always the latest; ease the persisted display toward it each frame.
-    // All setDisplay calls happen inside the rAF callback (never synchronously
-    // in the effect body).
-    let raf = 0;
-    const loop = () => {
-      const cur = displayRef.current;
-      const delta = target - cur;
-      if (Math.abs(delta) < 0.05) {
-        displayRef.current = target;
-        setDisplay(target);
-        return;
-      }
-      displayRef.current = cur + delta * 0.18; // easeOut factor per frame
-      setDisplay(displayRef.current);
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [target, resetKey]);
-
-  return display;
+function polar(angle: number, r: number) {
+  const rad = (angle * Math.PI) / 180;
+  return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
 }
 
-export function SpeedGauge({ value, max = 100, label, phase = 'idle', ping = 0 }: SpeedGaugeProps) {
-  const radius = 90;
-  const strokeWidth = 12;
-  const center = 110;
-  const startAngle = 135;
-  const endAngle = 405;
-  const sweep = endAngle - startAngle;
+const A0 = polar(START, R);
+const A1 = polar(START + SWEEP, R);
+const ARC = `M ${A0.x} ${A0.y} A ${R} ${R} 0 1 1 ${A1.x} ${A1.y}`;
 
-  const circumference = (sweep / 360) * 2 * Math.PI * radius;
+// Critically damped spring: no overshoot, settles in ~0.5s. Live samples
+// arrive every 125ms, so the needle glides between them instead of stepping.
+const OMEGA = 9;
+const SUBSTEP = 1 / 120;
 
-  const isPing = phase === 'ping';
-  const rawTarget = isPing ? ping : value;
-  // Snap the tween whenever we switch the measured quantity (ping ms vs Mbps).
-  const smooth = useSmoothed(rawTarget, isPing ? 'ping' : 'speed');
+interface Sim {
+  x: number; // speed mode: gauge position 0..1; ping mode: ms
+  v: number;
+  target: number;
+  mode: 'speed' | 'ping';
+  blank: boolean;
+  raf: number;
+  last: number;
+}
 
-  const clamped = Math.min(Math.max(smooth, 0), max);
-  const progress = max > 0 ? clamped / max : 0;
-  const offset = circumference * (1 - progress);
+export function SpeedGauge({ value, mode, tone, caption }: SpeedGaugeProps) {
+  const arcRef = useRef<SVGPathElement>(null);
+  const haloRef = useRef<SVGPathElement>(null);
+  const knobRef = useRef<SVGGElement>(null);
+  const numRef = useRef<SVGTextElement>(null);
+  const sim = useRef<Sim>({ x: 0, v: 0, target: 0, mode, blank: true, raf: 0, last: 0 });
 
-  const polarToCartesian = (angle: number) => {
-    const rad = (angle * Math.PI) / 180;
-    return {
-      x: center + radius * Math.cos(rad),
-      y: center + radius * Math.sin(rad),
+  // Draw the current simulated position straight into the SVG. Runs per
+  // animation frame, so it touches the DOM rather than React state.
+  function paint() {
+    const s = sim.current;
+    const pos = s.mode === 'speed' ? Math.min(Math.max(s.x, 0), 1) : 0;
+    const lit = pos > 0.002 ? '1' : '0';
+    for (const el of [arcRef.current, haloRef.current]) {
+      if (!el) continue;
+      el.style.strokeDashoffset = String(1 - pos);
+      el.style.opacity = lit;
+    }
+    if (knobRef.current) {
+      knobRef.current.setAttribute('transform', `rotate(${pos * SWEEP} ${CX} ${CY})`);
+      knobRef.current.style.opacity = s.mode === 'speed' && !s.blank ? '1' : '0';
+    }
+    if (numRef.current) {
+      numRef.current.textContent = s.blank
+        ? '—'
+        : s.mode === 'speed'
+          ? formatMbps(fromScale(pos))
+          : formatMs(Math.max(s.x, 0));
+    }
+  }
+
+  function frame(now: number) {
+    const s = sim.current;
+    const dt = Math.min((now - s.last) / 1000, 0.05);
+    s.last = now;
+    const steps = Math.max(1, Math.ceil(dt / SUBSTEP));
+    const h = dt / steps;
+    for (let i = 0; i < steps; i++) {
+      const a = -OMEGA * OMEGA * (s.x - s.target) - 2 * OMEGA * s.v;
+      s.v += a * h;
+      s.x += s.v * h;
+    }
+    const eps = s.mode === 'speed' ? 1e-4 : 0.01;
+    if (Math.abs(s.x - s.target) < eps && Math.abs(s.v) < eps * 10) {
+      s.x = s.target;
+      s.v = 0;
+      s.raf = 0;
+      paint();
+      return;
+    }
+    paint();
+    s.raf = requestAnimationFrame(frame);
+  }
+
+  useEffect(() => {
+    const s = sim.current;
+    const target = value == null ? 0 : mode === 'speed' ? toScale(value) : Math.max(value, 0);
+    if (s.mode !== mode) {
+      // Switching quantity (ms ↔ Mbps): start the new one from its own
+      // zero instead of sweeping across units.
+      s.mode = mode;
+      s.x = mode === 'speed' ? 0 : target;
+      s.v = 0;
+    }
+    s.blank = value == null;
+    s.target = target;
+
+    // Hidden pages get no animation frames, so a glide would freeze halfway
+    // (a backgrounded phone would come back to a stale figure): snap instead.
+    const reduced =
+      document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) {
+      s.x = target;
+      s.v = 0;
+      paint();
+      return;
+    }
+    if (!s.raf) {
+      s.last = performance.now();
+      s.raf = requestAnimationFrame(frame);
+    }
+    // frame/paint only read refs, so the running loop never goes stale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, mode]);
+
+  useEffect(() => {
+    const s = sim.current;
+    // Returning to the page: land on the latest value at once.
+    const onVisible = () => {
+      if (document.hidden) return;
+      cancelAnimationFrame(s.raf);
+      s.raf = 0;
+      s.x = s.target;
+      s.v = 0;
+      paint();
     };
-  };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      cancelAnimationFrame(s.raf);
+      s.raf = 0;
+    };
+     
+  }, []);
 
-  const start = polarToCartesian(startAngle);
-  const end = polarToCartesian(endAngle);
-  const largeArc = sweep > 180 ? 1 : 0;
-  const bgPath = `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}`;
-
-  const [core, glow] = PHASE_COLORS[phase] ?? PHASE_COLORS.idle;
-  const gradId = `speed-grad-${phase}`;
-
-  const displayValue = isPing ? ping : value; // use raw for show/hide decisions
-  const showValue = displayValue > 0;
-  const unit = isPing ? 'ms' : 'Mbps';
-  const showArc = clamped > 0 && (phase === 'download' || phase === 'upload' || phase === 'done');
-  const showPulse = phase === 'ping';
+  const color = TONE_VAR[tone];
 
   return (
-    <div className="flex flex-col items-center">
-      <svg width="220" height="180" viewBox="0 0 220 180">
-        <defs>
-          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor={glow} />
-            <stop offset="100%" stopColor={core} />
-          </linearGradient>
-          <filter id={`${gradId}-glow`} x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="3.5" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
+    <svg
+      viewBox="0 0 240 204"
+      className="w-full max-w-[300px] select-none"
+      role="img"
+      aria-label={value == null ? caption : `${caption} ${mode === 'speed' ? formatMbps(value) + ' Mbps' : formatMs(value) + ' ms'}`}
+    >
+      {/* Track */}
+      <path d={ARC} fill="none" stroke="var(--inset)" strokeWidth={12} strokeLinecap="round" />
+      <path d={ARC} fill="none" stroke="var(--hairline)" strokeWidth={12} strokeLinecap="round" strokeOpacity={0.5} strokeDasharray="0.002 0.123" pathLength={1} />
 
-        {/* Background arc */}
-        <path
-          d={bgPath}
-          fill="none"
-          stroke="hsl(215, 20%, 20%)"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-        />
-
-        {/* Progress arc — driven by the smoothed value, so it flows */}
-        {showArc && (
-          <path
-            d={bgPath}
-            fill="none"
-            stroke={`url(#${gradId})`}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            filter={`url(#${gradId}-glow)`}
-          />
-        )}
-
-        {/* Pulsing indicator during ping phase (no speed data yet) */}
-        {showPulse && (
-          <path
-            d={bgPath}
-            fill="none"
-            stroke={core}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={circumference * 0.75}
-            opacity={0.6}
+      {/* Tick labels — fixed scale, never re-fitted between tests */}
+      {GAUGE_TICKS.map((t, i) => {
+        const p = polar(START + (i / (GAUGE_TICKS.length - 1)) * SWEEP, R - 24);
+        return (
+          <text
+            key={t}
+            x={p.x}
+            y={p.y}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={10}
+            className="num font-mono"
+            fill="var(--ink-4)"
           >
-            <animate
-              attributeName="stroke-dashoffset"
-              values={`${circumference * 0.85};${circumference * 0.6};${circumference * 0.85}`}
-              dur="1.5s"
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="opacity"
-              values="0.4;0.8;0.4"
-              dur="1.5s"
-              repeatCount="indefinite"
-            />
-          </path>
-        )}
+            {t === 1000 ? '1k' : t}
+          </text>
+        );
+      })}
 
-        {/* Value text — animated count */}
-        <text
-          x={center}
-          y={center - 10}
-          textAnchor="middle"
-          className="fill-foreground tabular-nums"
-          fontSize="36"
-          fontWeight="bold"
-        >
-          {showValue ? smooth.toFixed(1) : '—'}
-        </text>
-        <text
-          x={center}
-          y={center + 15}
-          textAnchor="middle"
-          className="fill-muted-foreground"
-          fontSize="14"
-        >
-          {unit}
-        </text>
+      {/* Lit arc + soft halo, the way a front-panel LED glows */}
+      <path
+        ref={haloRef}
+        d={ARC}
+        fill="none"
+        stroke={color}
+        strokeWidth={22}
+        strokeLinecap="round"
+        pathLength={1}
+        strokeDasharray="1 1"
+        strokeDashoffset={1}
+        strokeOpacity={0.12}
+        style={{ transition: 'stroke 200ms var(--ease-out)', opacity: 0 }}
+      />
+      <path
+        ref={arcRef}
+        d={ARC}
+        fill="none"
+        stroke={color}
+        strokeWidth={12}
+        strokeLinecap="round"
+        pathLength={1}
+        strokeDasharray="1 1"
+        strokeDashoffset={1}
+        style={{ transition: 'stroke 200ms var(--ease-out)', opacity: 0 }}
+      />
 
-        {/* Label — truncate long server names */}
-        <text
-          x={center}
-          y={center + 35}
-          textAnchor="middle"
-          fontSize="11"
-          fill={core}
-          textLength={label.length > 30 ? '180' : undefined}
-          lengthAdjust="spacing"
-        >
-          {label.length > 40 ? label.slice(0, 38) + '...' : label}
-        </text>
-      </svg>
-    </div>
+      {/* Knob at the arc's leading edge */}
+      <g ref={knobRef} style={{ opacity: 0 }}>
+        <circle cx={A0.x} cy={A0.y} r={8} fill="var(--panel)" stroke={color} strokeWidth={3} style={{ transition: 'stroke 200ms var(--ease-out)' }} />
+      </g>
+
+      {/* Figure */}
+      <text
+        ref={numRef}
+        x={CX}
+        y={CY + 2}
+        textAnchor="middle"
+        fontSize={44}
+        fontWeight={600}
+        letterSpacing="-0.02em"
+        className="num font-mono"
+        fill="var(--ink)"
+      >
+        —
+      </text>
+      <text x={CX} y={CY + 26} textAnchor="middle" fontSize={13} fill="var(--ink-3)">
+        {mode === 'speed' ? 'Mbps' : 'ms'}
+      </text>
+      <text
+        x={CX}
+        y={CY + 76}
+        textAnchor="middle"
+        fontSize={11}
+        fontWeight={500}
+        letterSpacing="0.06em"
+        fill={tone === 'ink' ? 'var(--ink-3)' : color}
+        style={{ textTransform: 'uppercase' }}
+      >
+        {caption}
+      </text>
+    </svg>
   );
 }

@@ -1,68 +1,85 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp, Activity, Trash2 } from 'lucide-react';
+import { Play, Square, CheckCircle2, XCircle, ChevronDown, Activity, Trash2, Tv, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { StreamingCalculator } from '@/components/streaming-calculator';
+import { Panel, PanelHeader } from '@/components/shell/panel';
+import { Stat, StatStrip } from '@/components/shell/stat';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { formatMbps, formatMs, gradeMeaning, gradeTone } from '@/lib/speed';
+import { useNetwork } from '@/stores/network';
 import { toast } from 'sonner';
 import type { StreamingTestResult, StreamingCDN, WANLink } from '@/types';
 
-type Phase = 'idle' | 'cdn' | 'idle-latency' | 'download' | 'bufferbloat' | 'done' | 'error';
+type Phase = 'idle' | 'cdn' | 'idle-latency' | 'download' | 'done' | 'error' | 'cancelled';
 
-const PHASE_LABEL: Record<Phase, string> = {
-  idle: '',
-  cdn: 'Probing streaming CDNs…',
-  'idle-latency': 'Measuring idle latency…',
-  download: 'Saturating link for 20s…',
-  bufferbloat: 'Saturating link for 20s…',
-  done: 'Done',
-  error: 'Error',
-};
+const STEPS: { phase: Phase; label: string }[] = [
+  { phase: 'cdn', label: 'Streaming services' },
+  { phase: 'idle-latency', label: 'Idle latency' },
+  { phase: 'download', label: 'Line under load · 20s' },
+];
 
-// Grade colour scale — A+/A green, B/C amber, D/F red. Used for both the
-// big badge and the per-quality table icons.
-function gradeColour(grade: string): string {
-  if (grade === 'A+' || grade === 'A') return 'text-emerald-500 border-emerald-500/50 bg-emerald-500/10';
-  if (grade === 'B') return 'text-lime-500 border-lime-500/50 bg-lime-500/10';
-  if (grade === 'C') return 'text-amber-500 border-amber-500/50 bg-amber-500/10';
-  if (grade === 'D') return 'text-orange-500 border-orange-500/50 bg-orange-500/10';
-  if (grade === 'F') return 'text-red-500 border-red-500/50 bg-red-500/10';
-  return 'text-muted-foreground border-muted bg-muted/30';
+const GRADE_STYLE = {
+  link: 'text-link border-link/35 bg-link/10',
+  amber: 'text-amber border-amber/35 bg-amber/10',
+  fault: 'text-fault border-fault/40 bg-fault/10',
+  ink: 'text-ink-3 border-hairline bg-inset',
+} as const;
+
+function GradeBadge({ grade, size = 'lg' }: { grade: string; size?: 'lg' | 'sm' }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center justify-center rounded-md border font-semibold',
+        size === 'lg' ? 'h-16 min-w-16 px-3 text-3xl rounded-xl' : 'h-6 min-w-8 px-1.5 text-xs',
+        GRADE_STYLE[gradeTone(grade)]
+      )}
+    >
+      {grade}
+    </span>
+  );
 }
 
-function gradeDescription(grade: string): string {
-  switch (grade) {
-    case 'A+': return 'Excellent — imperceptible under load';
-    case 'A':  return 'Great — minimal latency rise';
-    case 'B':  return 'Good — fine for most streaming';
-    case 'C':  return 'Fair — 4K live may stutter';
-    case 'D':  return 'Poor — video calls and live 4K will struggle';
-    case 'F':  return 'Severe — most live content unwatchable';
-    default:   return 'Bufferbloat target unreachable';
-  }
+function cdnTone(ms: number) {
+  return ms < 50 ? 'text-link' : ms < 150 ? 'text-amber' : 'text-fault';
 }
 
-export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromSpeedTest: number | null }) {
+const lineDead = (l: WANLink) => l.status !== 'bound' || !l.alive;
+
+export function StreamingTest({
+  lastDownloadFromSpeedTest,
+  blocked = false,
+  onRunningChange,
+}: {
+  lastDownloadFromSpeedTest: number | null;
+  /** Another test holds the line; one test at a time. */
+  blocked?: boolean;
+  onRunningChange?: (running: boolean) => void;
+}) {
+  const { links } = useNetwork();
   const [phase, setPhase] = useState<Phase>('idle');
   const [liveSpeed, setLiveSpeed] = useState<number | null>(null);
   const [liveLatency, setLiveLatency] = useState<number | null>(null);
-  const [progressCDNs, setProgressCDNs] = useState<StreamingCDN[]>([]);
+  const [progress, setProgress] = useState(0);
+  const [note, setNote] = useState<string | null>(null);
+  const [cdns, setCdns] = useState<StreamingCDN[]>([]);
   const [result, setResult] = useState<StreamingTestResult | null>(null);
-  const [showCalculator, setShowCalculator] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<StreamingTestResult[]>([]);
-  const [wanLinks, setWanLinks] = useState<WANLink[]>([]);
-  const [wanChoice, setWanChoice] = useState<string>(''); // '' = current routing
+  const [wanChoice, setWanChoice] = useState(''); // '' = current routing
+  const [showCalculator, setShowCalculator] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
 
-  const isRunning = phase !== 'idle' && phase !== 'done' && phase !== 'error';
+  const running = phase === 'cdn' || phase === 'idle-latency' || phase === 'download';
+
+  useEffect(() => {
+    onRunningChange?.(running);
+  }, [running, onRunningChange]);
 
   const fetchHistory = () => {
     api.getStreamingHistory(20).then((res) => setHistory(res.results || [])).catch(() => setHistory([]));
@@ -70,14 +87,8 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
 
   useEffect(() => {
     fetchHistory();
-    const fetchLinks = () =>
-      api.getWanLinks().then((res) => setWanLinks(res.links || [])).catch(() => {});
-    fetchLinks();
-    const t = setInterval(fetchLinks, 30000);
-    return () => clearInterval(t);
+    return () => cancelRef.current?.(); // a running test stops with the page
   }, []);
-
-  const lineDead = (l: WANLink) => l.status !== 'bound' || !l.alive;
 
   const clearHistory = async () => {
     try {
@@ -89,9 +100,9 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
     }
   };
 
-  function startTest() {
+  function start() {
     if (wanChoice) {
-      const chosen = wanLinks.find((l) => l.interface === wanChoice);
+      const chosen = links.find((l) => l.interface === wanChoice);
       if (chosen && lineDead(chosen)) {
         toast.error(`${chosen.label || chosen.interface} has no internet — can't measure it`);
         return;
@@ -101,314 +112,314 @@ export function StreamingTest({ lastDownloadFromSpeedTest }: { lastDownloadFromS
     setPhase('cdn');
     setLiveSpeed(null);
     setLiveLatency(null);
-    setProgressCDNs([]);
+    setProgress(0);
+    setNote(null);
+    setCdns([]);
     setResult(null);
     setError(null);
 
     cancelRef.current = api.runStreamingTest((ev) => {
-      if (ev.phase === 'cdn' && ev.cdn) {
-        setProgressCDNs((prev) => [...prev, ev.cdn!]);
-        return;
-      }
-      if (ev.phase === 'idle') {
-        // Backend's "idle" phase clashes with our "idle-latency" UI label;
-        // remap for clarity.
-        setPhase('idle-latency');
-        return;
-      }
-      if (ev.phase === 'download') {
-        setPhase('download');
-        if (ev.speed !== undefined) setLiveSpeed(ev.speed);
-        return;
-      }
-      if (ev.phase === 'bufferbloat') {
-        if (ev.latency !== undefined) setLiveLatency(ev.latency);
-        return;
-      }
-      if (ev.phase === 'done') {
-        setPhase('done');
-        if (ev.result) setResult(ev.result);
-        fetchHistory();
-        return;
-      }
-      if (ev.phase === 'error') {
-        setPhase('error');
-        setError(ev.error ?? 'Test failed');
-        return;
+      switch (ev.phase) {
+        case 'cdn':
+          if (ev.cdn) setCdns((prev) => [...prev, ev.cdn!]);
+          return;
+        case 'idle':
+          setPhase('idle-latency');
+          if (ev.message && ev.message.toLowerCase().includes('unreachable')) setNote(ev.message);
+          return;
+        case 'download':
+          setPhase('download');
+          if (ev.speed !== undefined) setLiveSpeed(ev.speed);
+          if (ev.progress !== undefined) setProgress(ev.progress);
+          return;
+        case 'bufferbloat':
+          if (ev.latency !== undefined) setLiveLatency(ev.latency);
+          return;
+        case 'done':
+          cancelRef.current = null;
+          setPhase('done');
+          if (ev.result) setResult(ev.result);
+          fetchHistory();
+          return;
+        case 'error':
+          cancelRef.current = null;
+          setPhase('error');
+          setError(ev.error ?? 'Test failed');
+          return;
       }
     }, wanChoice || undefined);
   }
 
+  function cancel() {
+    cancelRef.current?.();
+    cancelRef.current = null;
+    setPhase('cancelled');
+  }
+
+  const stepIndex = STEPS.findIndex((s) => s.phase === phase);
+
   return (
     <div className="space-y-6">
-      {/* Header card — Run Test button + phase indicator */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Streaming Quality Test</CardTitle>
-          <CardDescription>
-            Probes CDN reachability, saturates the link, and measures bufferbloat — the metric that decides whether
-            live 4K and video calls actually work on your connection.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <Button size="lg" onClick={startTest} disabled={isRunning} className="gap-2">
-              {isRunning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {isRunning ? 'Running…' : 'Run Streaming Test'}
+      <Panel>
+        <PanelHeader title="Streaming quality" icon={<Tv />} />
+        <p className="-mt-1.5 mb-4 max-w-2xl text-sm text-ink-3">
+          Checks the streaming services, then fills the line for 20 seconds and watches latency. Bufferbloat — how much
+          latency rises while the line is busy — decides whether live 4K and video calls hold up.
+        </p>
+
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
+          {running ? (
+            <Button size="lg" variant="outline" onClick={cancel} className="gap-2 border-hairline-strong">
+              <Square className="size-3.5 fill-current" />
+              Cancel test
             </Button>
-            {wanLinks.length > 1 && (
-              <Select
-                value={wanChoice || 'auto'}
-                onValueChange={(v) => setWanChoice(v === 'auto' ? '' : v)}
-                disabled={isRunning}
-              >
-                <SelectTrigger className="h-9 w-full sm:w-44 text-xs" aria-label="Measure via line">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Current routing</SelectItem>
-                  {wanLinks.map((l) => (
-                    <SelectItem key={l.interface} value={l.interface} disabled={lineDead(l)}>
-                      via {l.label || l.interface}
-                      {lineDead(l) ? ' — no internet' : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          ) : (
+            <Button size="lg" onClick={start} disabled={blocked} className="gap-2">
+              <Play className="size-4" />
+              {result ? 'Run again' : 'Run streaming test'}
+            </Button>
+          )}
+          {links.length > 1 && (
+            <Select value={wanChoice || 'auto'} onValueChange={(v) => setWanChoice(v === 'auto' ? '' : v)} disabled={running}>
+              <SelectTrigger className="h-9 w-full text-xs sm:w-48" aria-label="Measure via line">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Current routing</SelectItem>
+                {links.map((l) => (
+                  <SelectItem key={l.interface} value={l.interface} disabled={lineDead(l)}>
+                    via {l.label || l.interface}
+                    {lineDead(l) ? ' — no internet' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <span className="text-xs text-ink-3" aria-live="polite">
+            {blocked && !running
+              ? 'A speed test is running — one test at a time.'
+              : phase === 'cancelled'
+                ? 'Cancelled — nothing was saved'
+                : phase === 'error'
+                  ? <span className="text-fault">{error}</span>
+                  : !running && result?.wanLabel
+                    ? `Measured via ${result.wanLabel}`
+                    : null}
+          </span>
+        </div>
+
+        {running && (
+          <div className="mt-5 space-y-4 border-t border-hairline-soft pt-4">
+            {/* Steps */}
+            <ol className="grid grid-cols-3 gap-2">
+              {STEPS.map((s, i) => {
+                const done = i < stepIndex;
+                const now = i === stepIndex;
+                const fill = done ? 1 : now ? (s.phase === 'download' ? progress : 0.5) : 0;
+                return (
+                  <li key={s.phase} className="min-w-0">
+                    <div className="h-1 overflow-hidden rounded-full bg-inset">
+                      <div
+                        className={cn(
+                          'h-full origin-left transition-transform duration-150 ease-linear',
+                          done ? 'bg-link' : 'bg-link/70',
+                          now && s.phase !== 'download' && 'animate-pulse'
+                        )}
+                        style={{ transform: `scaleX(${fill})` }}
+                      />
+                    </div>
+                    <div className={cn('mt-1.5 truncate text-[11px]', now ? 'text-ink' : done ? 'text-ink-3' : 'text-ink-4')}>
+                      {s.label}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+
+            {phase === 'download' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="eyebrow">Download now</div>
+                  <div className="num mt-1 font-mono text-[22px] font-semibold text-ink">
+                    {liveSpeed != null ? formatMbps(liveSpeed) : '—'}
+                    <span className="ml-1 font-sans text-xs font-normal text-ink-3">Mbps</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="eyebrow">Latency under load</div>
+                  <div className="num mt-1 font-mono text-[22px] font-semibold text-ink">
+                    {liveLatency != null ? formatMs(liveLatency) : '—'}
+                    <span className="ml-1 font-sans text-xs font-normal text-ink-3">ms</span>
+                  </div>
+                </div>
+              </div>
             )}
-            {isRunning && <span className="text-sm text-muted-foreground">{PHASE_LABEL[phase]}</span>}
-            {!isRunning && result?.wanLabel && (
-              <span className="text-xs text-muted-foreground">measured via {result.wanLabel}</span>
+
+            {cdns.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {cdns.map((c) => (
+                  <span
+                    key={c.host}
+                    className={cn(
+                      'inline-flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] font-medium',
+                      c.reachable ? 'border-hairline text-ink-2' : 'border-fault/35 text-fault'
+                    )}
+                  >
+                    {c.name}
+                    <span className={cn('num font-mono', c.reachable ? cdnTone(c.pingMs) : '')}>
+                      {c.reachable ? `${c.pingMs.toFixed(0)} ms` : 'unreachable'}
+                    </span>
+                  </span>
+                ))}
+              </div>
             )}
-            {phase === 'error' && error && (
-              <span className="text-sm text-destructive">Error: {error}</span>
-            )}
+            {note && <p className="text-xs text-amber">{note}</p>}
           </div>
+        )}
+      </Panel>
 
-          {/* Live progress: download speed + bufferbloat sample */}
-          {(phase === 'download' || phase === 'bufferbloat') && (
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t">
-              <div>
-                <div className="text-xs text-muted-foreground">Live download</div>
-                <div className="text-2xl font-mono font-semibold">
-                  {liveSpeed !== null ? `${liveSpeed.toFixed(1)} Mbps` : '—'}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Latency under load</div>
-                <div className="text-2xl font-mono font-semibold">
-                  {liveLatency !== null ? `${liveLatency.toFixed(0)} ms` : '—'}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* CDN probes complete in parallel — show them filling in */}
-          {progressCDNs.length > 0 && !result && (
-            <div className="flex flex-wrap gap-2 pt-2 border-t">
-              {progressCDNs.map((c) => (
-                <Badge
-                  key={c.host}
-                  variant="outline"
-                  className={c.reachable ? 'text-emerald-500 border-emerald-500/40' : 'text-destructive border-destructive/40'}
-                >
-                  {c.name}: {c.reachable ? `${c.pingMs.toFixed(0)} ms` : 'unreachable'}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Results */}
       {result && (
         <>
-          {/* Headline: bufferbloat grade */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                <div className="flex flex-col items-center md:items-start">
-                  <div className="text-sm text-muted-foreground mb-1">Bufferbloat</div>
-                  <div className={`inline-flex items-center justify-center min-w-20 h-20 rounded-xl border-2 text-4xl font-bold ${gradeColour(result.bufferbloatGrade)}`}>
-                    {result.bufferbloatGrade}
+          {/* Headline: the bufferbloat grade, then the figures behind it */}
+          <Panel tone={gradeTone(result.bufferbloatGrade) === 'fault' ? 'fault' : gradeTone(result.bufferbloatGrade) === 'amber' ? 'amber' : undefined}>
+            <div className="flex items-center gap-4">
+              <GradeBadge grade={result.bufferbloatGrade} />
+              <div className="min-w-0">
+                <div className="eyebrow">Bufferbloat</div>
+                <div className="mt-0.5 text-base font-medium text-ink">{gradeMeaning(result.bufferbloatGrade)}</div>
+                {result.loadedLatency > 0 && (
+                  <div className="num mt-0.5 font-mono text-xs text-ink-3">
+                    +{formatMs(result.latencyRise)} ms while the line is full
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">{gradeDescription(result.bufferbloatGrade)}</p>
-                </div>
-
-                <div className="md:col-span-2 grid grid-cols-2 gap-4">
-                  <Stat label="Sustained download" value={`${result.sustainedDownload.toFixed(1)} Mbps`} hint={`peak ${result.peakDownload.toFixed(1)}`} />
-                  <Stat label="Idle latency" value={result.idleLatency > 0 ? `${result.idleLatency.toFixed(1)} ms` : '—'} />
-                  <Stat label="Loaded latency" value={result.loadedLatency > 0 ? `${result.loadedLatency.toFixed(1)} ms` : '—'} hint={result.worstLatency > 0 ? `p95 ${result.worstLatency.toFixed(0)}` : undefined} />
-                  <Stat
-                    label="Latency rise"
-                    value={result.latencyRise > 0 ? `+${result.latencyRise.toFixed(1)} ms` : '—'}
-                    hint={result.bufferbloatGrade !== '—' ? `grade ${result.bufferbloatGrade}` : undefined}
-                  />
-                </div>
+                )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </Panel>
 
-          {/* Per-CDN reachability */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                CDN reachability
-              </CardTitle>
-              <CardDescription>TCP-handshake latency to each streaming service. Lower = better peering with your ISP.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Service</TableHead>
-                    <TableHead className="text-right">Latency</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.cdns.map((c) => (
-                    <TableRow key={c.host}>
-                      <TableCell>
-                        <div className="font-medium">{c.name}</div>
-                        <div className="text-xs text-muted-foreground font-mono">{c.host}</div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {c.reachable ? (
-                          <span className={c.pingMs < 50 ? 'text-emerald-500' : c.pingMs < 150 ? 'text-amber-500' : 'text-destructive'}>
-                            {c.pingMs.toFixed(0)} ms
-                          </span>
-                        ) : (
-                          <span className="text-destructive">unreachable</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <StatStrip>
+            <Stat
+              label="Sustained"
+              value={<span className="font-mono">{formatMbps(result.sustainedDownload)}</span>}
+              hint={`Mbps · peak ${formatMbps(result.peakDownload)}`}
+              tone="link"
+            />
+            <Stat
+              label="Idle latency"
+              value={<span className="font-mono">{result.idleLatency > 0 ? formatMs(result.idleLatency) : '—'}</span>}
+              hint="ms"
+            />
+            <Stat
+              label="Loaded latency"
+              value={<span className="font-mono">{result.loadedLatency > 0 ? formatMs(result.loadedLatency) : '—'}</span>}
+              hint={result.worstLatency > 0 ? `ms · p95 ${result.worstLatency.toFixed(0)}` : 'ms'}
+            />
+            <Stat
+              label="Rise"
+              value={<span className="font-mono">{result.loadedLatency > 0 ? `+${formatMs(result.latencyRise)}` : '—'}</span>}
+              hint={`ms · grade ${result.bufferbloatGrade}`}
+              tone={gradeTone(result.bufferbloatGrade)}
+            />
+          </StatStrip>
 
-          {/* Per-quality verdict */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Quality verdict</CardTitle>
-              <CardDescription>
-                Based on your sustained throughput AND bufferbloat. A fast link with poor bufferbloat still fails
-                high-tier live streams.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead></TableHead>
-                    <TableHead>Quality</TableHead>
-                    <TableHead className="text-right">Required</TableHead>
-                    <TableHead>Verdict</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {result.qualities.map((q) => (
-                    <TableRow key={q.quality}>
-                      <TableCell className="w-8">
-                        {q.streamable ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-destructive" />
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">{q.quality}</TableCell>
-                      <TableCell className="text-right font-mono text-sm">{q.requiredMb} Mbps</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {q.streamable ? 'Comfortable' : q.reason}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Panel className="p-0 md:p-0">
+              <PanelHeader title="What will play" icon={<Tv />} className="mb-0 px-4 pt-4 pb-3 md:px-5" />
+              <ul className="divide-y divide-hairline-soft border-t border-hairline-soft">
+                {result.qualities.map((q) => (
+                  <li key={q.quality} className="flex items-center gap-3 px-4 py-2.5 md:px-5">
+                    {q.streamable ? (
+                      <CheckCircle2 className="size-4 shrink-0 text-link" />
+                    ) : (
+                      <XCircle className="size-4 shrink-0 text-fault" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-ink">{q.quality}</div>
+                      {!q.streamable && <div className="truncate text-xs text-ink-3">{q.reason}</div>}
+                    </div>
+                    <span className="num shrink-0 font-mono text-xs text-ink-3">{q.requiredMb} Mbps</span>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+
+            <Panel className="p-0 md:p-0">
+              <PanelHeader
+                title="Streaming services"
+                icon={<Activity />}
+                aside="handshake"
+                className="mb-0 px-4 pt-4 pb-3 md:px-5"
+              />
+              <ul className="divide-y divide-hairline-soft border-t border-hairline-soft">
+                {result.cdns.map((c) => (
+                  <li key={c.host} className="flex items-center justify-between gap-3 px-4 py-2.5 md:px-5">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-ink">{c.name}</div>
+                      <div className="truncate font-mono text-xs text-ink-4">{c.host}</div>
+                    </div>
+                    <span className={cn('num shrink-0 font-mono text-sm', c.reachable ? cdnTone(c.pingMs) : 'text-fault')}>
+                      {c.reachable ? `${c.pingMs.toFixed(0)} ms` : 'unreachable'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          </div>
         </>
       )}
 
-      {/* Recent streaming tests — persisted history */}
       {history.length > 0 && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="text-base">Recent tests</CardTitle>
-              <CardDescription>{history.length} saved — bufferbloat grade and sustained speed over time</CardDescription>
-            </div>
-            <Button variant="destructive" size="sm" className="gap-1" onClick={clearHistory}>
-              <Trash2 className="h-3.5 w-3.5" />
-              Clear
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Grade</TableHead>
-                  <TableHead className="text-right">Sustained</TableHead>
-                  <TableHead className="text-right hidden sm:table-cell">Latency rise</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((h) => (
-                  <TableRow key={h.timestamp}>
-                    <TableCell className="text-xs">
-                      {new Date(h.timestamp).toLocaleString(undefined, {
-                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center justify-center min-w-8 h-6 px-1.5 rounded border text-xs font-bold ${gradeColour(h.bufferbloatGrade)}`}>
-                        {h.bufferbloatGrade}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm">{h.sustainedDownload.toFixed(1)} Mbps</TableCell>
-                    <TableCell className="text-right font-mono text-sm hidden sm:table-cell">
-                      {h.latencyRise > 0 ? `+${h.latencyRise.toFixed(0)} ms` : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <Panel className="p-0 md:p-0">
+          <PanelHeader
+            title="Recent streaming tests"
+            icon={<History />}
+            className="mb-0 px-4 pt-4 pb-3 md:px-5"
+            aside={
+              <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-fault hover:text-fault" onClick={clearHistory}>
+                <Trash2 className="size-3.5" />
+                Clear
+              </Button>
+            }
+          />
+          <ul className="divide-y divide-hairline-soft border-t border-hairline-soft">
+            {history.map((h) => (
+              <li key={h.timestamp} className="flex items-center gap-3 px-4 py-2.5 md:px-5">
+                <GradeBadge grade={h.bufferbloatGrade} size="sm" />
+                <div className="min-w-0 flex-1 text-xs">
+                  <div className="text-ink-2">{h.wanLabel ?? 'Current routing'}</div>
+                  <div className="text-ink-4">
+                    {new Date(h.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+                <div className="num shrink-0 text-right font-mono text-xs">
+                  <div className="text-link">{formatMbps(h.sustainedDownload)} Mbps</div>
+                  <div className="text-ink-4">{h.loadedLatency > 0 ? `+${h.latencyRise.toFixed(0)} ms` : '—'}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Panel>
       )}
 
-      {/* Collapsible quick calculator — preserved from the old tab */}
-      <Card>
+      {/* Quick file calculator */}
+      <Panel className="p-0 md:p-0">
         <button
           type="button"
           onClick={() => setShowCalculator((v) => !v)}
-          className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/40 transition-colors"
+          aria-expanded={showCalculator}
+          className="flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3.5 text-left transition-colors hover:bg-raised/40 md:px-5"
         >
           <div>
-            <div className="text-sm font-medium">Quick file calculator</div>
-            <div className="text-xs text-muted-foreground">Plan downloads or local-media playback (Jellyfin, Real-Debrid)</div>
+            <div className="text-sm font-medium text-ink">Quick file calculator</div>
+            <div className="text-xs text-ink-3">Plan downloads or local-media playback (Jellyfin, Real-Debrid)</div>
           </div>
-          {showCalculator ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          <ChevronDown className={cn('size-4 shrink-0 text-ink-3 transition-transform duration-200', showCalculator && 'rotate-180')} />
         </button>
         {showCalculator && (
-          <CardContent>
+          <div className="border-t border-hairline-soft px-4 py-4 md:px-5">
             <StreamingCalculator downloadSpeed={result?.sustainedDownload ?? lastDownloadFromSpeedTest} />
-          </CardContent>
+          </div>
         )}
-      </Card>
-    </div>
-  );
-}
-
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-lg font-mono font-semibold">{value}</div>
-      {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+      </Panel>
     </div>
   );
 }
