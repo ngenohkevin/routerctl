@@ -131,8 +131,13 @@ export interface LoginResponse {
  * a `data:` line and its closing blank line often arrive in different reads —
  * and `:` heartbeat comments are ignored. If the stream ends without a
  * terminal event ("done"/"error") the caller gets an error event, so the UI
- * never sits on a test that silently died. Returns an abort function.
+ * never sits on a test that silently died. The agent sends a heartbeat every
+ * 10s, so 25s of silence means the path to it has stalled (the stream can
+ * hang without erroring) — that is reported instead of freezing the page.
+ * Returns an abort function.
  */
+const STALL_MS = 25_000;
+
 function streamTest<E extends { phase: string }>(
   path: string,
   onEvent: (event: E) => void,
@@ -143,9 +148,23 @@ function streamTest<E extends { phase: string }>(
   (async () => {
     let finished = false;
     const emit = (ev: E) => {
+      if (finished) return;
       if (ev.phase === 'done' || ev.phase === 'error') finished = true;
       onEvent(ev);
     };
+
+    let lastData = Date.now();
+    const watchdog = setInterval(() => {
+      // A backgrounded page may not be read from; don't count that time.
+      if (document.hidden) {
+        lastData = Date.now();
+        return;
+      }
+      if (!finished && Date.now() - lastData > STALL_MS) {
+        emit(fail('No updates from the agent for 25 seconds — the connection stalled'));
+        controller.abort();
+      }
+    }, 5000);
 
     try {
       const headers: Record<string, string> = { Accept: 'text/event-stream' };
@@ -205,6 +224,7 @@ function streamTest<E extends { phase: string }>(
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        lastData = Date.now();
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
@@ -219,6 +239,8 @@ function streamTest<E extends { phase: string }>(
       if ((err as Error).name !== 'AbortError' && !finished) {
         emit(fail('Connection to the agent was lost'));
       }
+    } finally {
+      clearInterval(watchdog);
     }
   })();
 
