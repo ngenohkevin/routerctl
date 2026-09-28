@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Settings, ArrowLeft, Power, Server, Globe } from 'lucide-react';
+import { Power, Server, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { RebootDialog } from '@/components/reboot-dialog';
@@ -12,7 +11,8 @@ import { ScheduledTasks } from '@/components/scheduled-tasks';
 import { DnsSettingsDialog } from '@/components/dns-settings-dialog';
 import { DefaultBandwidthCard } from '@/components/default-bandwidth-card';
 import { DhcpDnsDialog } from '@/components/dhcp-dns-dialog';
-import { AgentStatus } from '@/components/agent-status';
+import { AppShell } from '@/components/shell/app-shell';
+import { PageHeader } from '@/components/shell/page-header';
 import { api, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
 import type { ScheduledTask, HealthStatus, SystemInfo, DnsSettings, DHCPNetwork } from '@/types';
@@ -135,26 +135,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
-            </Link>
-            <Settings className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-            <div>
-              <h1 className="text-lg sm:text-2xl font-bold">Settings</h1>
-              <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
-                Router management and scheduled tasks
-              </p>
-            </div>
-          </div>
-          <AgentStatus health={health} isConnected={!!health?.routerConnected} />
-        </div>
+    <AppShell>
+      <div className="max-w-4xl space-y-6">
+        <PageHeader
+          title="Settings"
+          description="Router-wide controls: default bandwidth, DNS, and scheduled reboots and tasks."
+        />
 
         {/* Router Info */}
         {systemInfo && (
@@ -303,6 +289,6 @@ export default function SettingsPage() {
           onRefresh={fetchData}
         />
       </div>
-    </div>
+    </AppShell>
   );
 }

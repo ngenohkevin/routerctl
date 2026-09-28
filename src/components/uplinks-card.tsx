@@ -1,9 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Globe, Play, Crown, RefreshCw, Pin } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -16,19 +14,37 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { timeAgo } from '@/components/device-detail-dialog';
-import type { WANLink, CDNSteering, CDNGroupStatus, CFHealth, LineState, WANFailoverStatus } from '@/types';
+import { Panel, PanelHeader } from '@/components/shell/panel';
+import { Led, toneFor, type LedTone } from '@/components/shell/led';
+import { useNetwork } from '@/stores/network';
+import type { WANLink, CDNGroupStatus, CFHealth, LineState } from '@/types';
 
-// Line quality from the agent's failover loop. A line can answer every probe
-// and still be unusable (2026-09-28: Faiba at ~2s handshakes, 50% loss at its
-// first hop — shown as a healthy "Primary" while video buffered everywhere).
-const LINE_TONE: Record<LineState, string> = {
-  up: 'text-muted-foreground',
-  degraded: 'text-amber-500',
-  severe: 'text-red-500',
-  down: 'text-red-500',
+const GROUP_TITLES: Record<string, string> = {
+  cloudflare: 'Cloudflare',
+  google: 'YouTube · Google',
 };
+
+const PROBE_TONE: Record<string, string> = {
+  up: 'text-ink-3',
+  degraded: 'text-amber',
+  down: 'text-fault',
+};
+
+const PROBE_TEXT: Record<string, string> = {
+  degraded: 'congested',
+  down: 'unreachable',
+};
+
+// "degraded" = this line's own CDN probe timed out but the line still answered
+// another probe pinned to it — a saturated uplink, not an outage. Agents
+// predating that field only send `alive`.
+function probeState(p?: CFHealth): 'up' | 'degraded' | 'down' | undefined {
+  if (!p) return undefined;
+  return p.state ?? (p.alive ? 'up' : 'down');
+}
 
 const LINE_LABEL: Record<LineState, string> = {
   up: 'Healthy',
@@ -37,38 +53,48 @@ const LINE_LABEL: Record<LineState, string> = {
   down: 'No internet',
 };
 
-function qualityText(l: WANLink): string | null {
-  if (!l.state) return null;
-  if (l.state === 'down') return LINE_LABEL.down;
-  const parts = [];
-  if (l.medianMs) parts.push(`${Math.round(l.medianMs)} ms`);
-  parts.push(`${Math.round(l.lossPct ?? 0)}% loss`);
-  const detail = parts.join(' · ');
-  return l.state === 'up' ? detail : `${LINE_LABEL[l.state]} — ${detail}`;
+function lineTone(l: WANLink): LedTone {
+  if (l.status !== 'bound' || l.alive === false) return 'fault';
+  return l.state ? toneFor(l.state) : 'link';
 }
 
-const GROUP_TITLES: Record<string, string> = {
-  cloudflare: 'Cloudflare',
-  google: 'YouTube · Google',
-};
-
-const PROBE_TONE: Record<string, string> = {
-  up: 'text-green-500',
-  degraded: 'text-amber-500',
-  down: 'text-red-500',
-};
-
-const PROBE_TEXT: Record<string, string> = {
-  degraded: 'congested',
-  down: 'unreachable',
-};
-
-// The agent reports "degraded" when this line's own CDN probe timed out but
-// the line still answered another probe pinned to it — a saturated uplink,
-// not an outage. Agents predating that field only send `alive`.
-function probeState(p?: CFHealth): 'up' | 'degraded' | 'down' | undefined {
-  if (!p) return undefined;
-  return p.state ?? (p.alive ? 'up' : 'down');
+/** Segmented pair of buttons (auto / manual style). */
+function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  value: T;
+  options: { value: T; label: string; icon?: ReactNode }[];
+  onChange: (v: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex rounded-md border border-hairline bg-inset p-0.5" role="radiogroup">
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            disabled={disabled || on}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              'flex h-7 items-center gap-1.5 rounded-[5px] px-2.5 text-xs font-medium transition-colors duration-150',
+              on ? 'bg-raised text-ink' : 'text-ink-3 hover:text-ink-2',
+              'disabled:cursor-default'
+            )}
+          >
+            {o.icon}
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 interface UplinksCardProps {
@@ -83,57 +109,34 @@ interface UplinksCardProps {
 }
 
 export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }: UplinksCardProps) {
-  const [links, setLinks] = useState<WANLink[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const { links, failover, cdn, loaded, refresh } = useNetwork();
   const [confirmTarget, setConfirmTarget] = useState<WANLink | null>(null);
   const [switching, setSwitching] = useState(false);
-  const [cdn, setCdn] = useState<CDNSteering | null>(null);
   const [cdnSwitching, setCdnSwitching] = useState(false);
-  const [failover, setFailover] = useState<WANFailoverStatus | null>(null);
   const [failoverSwitching, setFailoverSwitching] = useState(false);
 
-  const fetchLinks = useCallback(async () => {
-    try {
-      const res = await api.getWanLinks();
-      setLinks(res.links || []);
-    } catch {
-      // agent unreachable — keep whatever we had
-    } finally {
-      setLoaded(true);
-    }
-    api.getCdnSteering().then(setCdn).catch(() => null);
-    // Older agents have no failover endpoint — the section just stays hidden.
-    api.getWanFailover().then(setFailover).catch(() => null);
-  }, []);
+  // Refresh immediately when the parent signals a completed test.
+  useEffect(() => {
+    if (refreshToken) refresh();
+  }, [refreshToken, refresh]);
 
   const handleFailoverMode = async (mode: 'auto' | 'manual') => {
     if (!failover || failover.mode === mode) return;
     setFailoverSwitching(true);
     try {
-      setFailover(await api.setWanFailover({ mode }));
+      await api.setWanFailover({ mode });
       toast.success(
         mode === 'auto'
           ? 'Primary line is automatic — a severely degraded line is escaped'
           : 'Primary line pinned — automatic failover paused'
       );
+      refresh();
     } catch {
       toast.error('Failed to change failover mode');
     } finally {
       setFailoverSwitching(false);
     }
   };
-
-  useEffect(() => {
-    fetchLinks();
-    const t = setInterval(fetchLinks, 30000);
-    return () => clearInterval(t);
-  }, [fetchLinks]);
-
-  // Refresh immediately when the parent signals a completed test — the new
-  // result should appear on the line's card right away, not on the next poll.
-  useEffect(() => {
-    if (refreshToken) fetchLinks();
-  }, [refreshToken, fetchLinks]);
 
   const handleCdnSwitch = async (g: CDNGroupStatus, iface: string, name: string) => {
     const isAuto = g.mode !== 'manual';
@@ -142,12 +145,8 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
     try {
       await api.setCdnSteering(iface, g.group);
       const title = GROUP_TITLES[g.group] || g.group;
-      toast.success(
-        iface === 'auto'
-          ? `${title} routing is automatic — healthiest path wins`
-          : `${title} pinned to ${name}`
-      );
-      api.getCdnSteering().then(setCdn).catch(() => null);
+      toast.success(iface === 'auto' ? `${title} routing is automatic` : `${title} pinned to ${name}`);
+      refresh();
     } catch {
       toast.error('Failed to switch CDN routing');
     } finally {
@@ -160,143 +159,110 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
     setSwitching(true);
     try {
       await api.setPrimaryWan(confirmTarget.interface);
-      toast.success(`${confirmTarget.label || confirmTarget.interface} is now the primary uplink`);
+      toast.success(`${confirmTarget.label || confirmTarget.interface} is now the primary line`);
       setConfirmTarget(null);
+      refresh();
       // the route change settles within a couple of seconds
-      setTimeout(fetchLinks, 3000);
-      fetchLinks();
+      setTimeout(refresh, 3000);
     } catch {
-      toast.error('Failed to switch primary uplink');
+      toast.error('Failed to switch primary line');
     } finally {
       setSwitching(false);
     }
   };
 
   if (loaded && links.length === 0) return null;
+  const preferredLabel = failover ? links.find((l) => l.interface === failover.preferred)?.label || failover.preferred : '';
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-          <Globe className="h-4 w-4" />
-          Internet Uplinks
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <Panel>
+      <PanelHeader title="Internet lines" icon={<Globe />} />
+
+      <div className="space-y-2.5">
         {links.map((l) => {
           const down = l.status !== 'bound';
-          const noInternet = !down && !l.alive;
+          const noInternet = !down && l.alive === false;
           const dead = down || noInternet;
-          const severe = !dead && l.state === 'severe';
-          const degraded = !dead && l.state === 'degraded';
-          const quality = dead ? null : qualityText(l);
+          const tone = lineTone(l);
+          const ms = l.medianMs ?? l.pingMs;
           return (
             <div
               key={l.interface}
-              className={
-                'rounded-lg border p-3 space-y-1.5 ' +
-                (severe ? 'border-red-500/50' : degraded ? 'border-amber-500/40' : 'border-border/60')
-              }
+              className={cn(
+                'rounded-lg border p-3',
+                tone === 'fault' && l.primary
+                  ? 'border-fault/40'
+                  : tone === 'amber'
+                    ? 'border-amber/35'
+                    : l.primary
+                      ? 'border-hairline-strong'
+                      : 'border-hairline',
+                l.primary && 'bg-raised/60'
+              )}
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className={
-                      'h-2 w-2 rounded-full shrink-0 ' +
-                      (down || noInternet || severe
-                        ? 'bg-red-500'
-                        : degraded
-                          ? 'bg-amber-500'
-                          : l.primary
-                            ? 'bg-green-500 animate-pulse'
-                            : 'bg-blue-500')
-                    }
-                  />
-                  <span className="text-sm font-medium truncate">
-                    {l.label || l.interface}
+                <div className="flex min-w-0 items-center gap-2">
+                  <Led tone={tone} live={l.primary && tone === 'link'} />
+                  <span className="truncate text-sm font-medium text-ink">{l.label || l.interface}</span>
+                  <span className="text-[11px] text-ink-4">{l.interface}</span>
+                </div>
+                {l.primary ? (
+                  <span className="flex items-center gap-1 text-[11px] font-medium text-link">
+                    <Crown className="size-3" /> Primary
                   </span>
-                  <span className="text-xs text-muted-foreground">{l.interface}</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {l.alive && l.pingMs && !l.state ? (
-                    <span className="text-[10px] text-muted-foreground tabular-nums">
-                      {l.pingMs} ms
-                    </span>
-                  ) : null}
-                  {l.primary ? (
-                    <Badge
-                      variant="outline"
-                      className={
-                        'text-xs gap-1 ' +
-                        (severe
-                          ? 'text-red-500 border-red-500'
-                          : degraded
-                            ? 'text-amber-500 border-amber-500'
-                            : 'text-green-500 border-green-500')
-                      }
-                    >
-                      <Crown className="h-3 w-3" />
-                      Primary
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="outline"
-                      className={
-                        'text-xs ' +
-                        (down || noInternet
-                          ? 'text-red-500 border-red-500'
-                          : 'text-blue-400 border-blue-400')
-                      }
-                    >
-                      {down ? 'Down' : noInternet ? 'No internet' : 'Standby'}
-                    </Badge>
-                  )}
-                </div>
+                ) : (
+                  <span className={cn('text-[11px] font-medium', dead ? 'text-fault' : 'text-ink-4')}>
+                    {down ? 'Down' : noInternet ? 'No internet' : 'Standby'}
+                  </span>
+                )}
               </div>
-              {quality && l.state && (
-                <div className={'text-xs tabular-nums ' + LINE_TONE[l.state]}>
-                  {l.state !== 'up' && <span className="font-medium">{quality}</span>}
-                  {l.state === 'up' && <span>live: {quality}</span>}
+
+              {!dead && (
+                <div
+                  className={cn(
+                    'num mt-1 pl-4 font-mono text-xs',
+                    tone === 'fault' ? 'text-fault' : tone === 'amber' ? 'text-amber' : 'text-ink-3'
+                  )}
+                >
+                  {l.state && l.state !== 'up' && <span className="font-sans font-medium">{LINE_LABEL[l.state]} · </span>}
+                  {ms ? `${Math.round(ms)} ms` : '—'}
+                  {l.lossPct !== undefined ? ` · ${Math.round(l.lossPct)}% loss` : ''}
                 </div>
               )}
+
               {(l.lastDownload ?? 0) > 0 ? (
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 tabular-nums">
-                  <span className="text-base font-semibold text-green-500 whitespace-nowrap">
+                <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 pl-4">
+                  <span className="num text-[15px] font-semibold text-ink">
                     ↓ {l.lastDownload}
-                    <span className="text-[10px] font-normal text-muted-foreground ml-0.5">Mbps</span>
+                    <span className="ml-0.5 text-[11px] font-normal text-ink-3">Mbps</span>
                   </span>
-                  <span className="text-base font-semibold text-blue-500 whitespace-nowrap">
+                  <span className="num text-[15px] font-semibold text-ink-2">
                     ↑ {l.lastUpload}
-                    <span className="text-[10px] font-normal text-muted-foreground ml-0.5">Mbps</span>
+                    <span className="ml-0.5 text-[11px] font-normal text-ink-3">Mbps</span>
                   </span>
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                    {l.lastPing ? `${l.lastPing} ms` : ''}
-                    {l.lastTestAt && timeAgo(l.lastTestAt) ? ` · ${timeAgo(l.lastTestAt)}` : ''}
+                  <span className="text-[11px] text-ink-4">
+                    tested{l.lastTestAt && timeAgo(l.lastTestAt) ? ` ${timeAgo(l.lastTestAt)}` : ''}
                   </span>
                 </div>
               ) : (
-                !down && (
-                  <div className="text-[10px] text-muted-foreground italic">
-                    not measured yet — run a test on this line
-                  </div>
-                )
+                !down && <div className="mt-1.5 pl-4 text-[11px] italic text-ink-4">not speed-tested yet</div>
               )}
-              <div className="text-[10px] text-muted-foreground truncate">
-                {down
-                  ? `no lease (${l.status || 'disconnected'})`
-                  : `${l.address || '—'} via ${l.gateway || '—'}`}
+
+              <div className="mt-1 truncate pl-4 font-mono text-[11px] text-ink-4">
+                {down ? `no lease (${l.status || 'disconnected'})` : `${l.address || '—'} via ${l.gateway || '—'}`}
               </div>
-              {(onTest || allowSetPrimary) && (
-                <div className="flex gap-2 pt-1">
+
+              {(onTest || (allowSetPrimary && !l.primary)) && (
+                <div className="mt-2.5 flex gap-2 pl-4">
                   {onTest && (
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 px-2 gap-1 text-xs"
+                      className="h-8 gap-1.5 px-2.5 text-xs"
                       disabled={disabled || dead}
                       onClick={() => onTest(l.interface, l.label || l.interface)}
                     >
-                      <Play className="h-3 w-3" />
+                      <Play className="size-3" />
                       Test this line
                     </Button>
                   )}
@@ -304,11 +270,11 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 px-2 gap-1 text-xs"
+                      className="h-8 gap-1.5 px-2.5 text-xs"
                       disabled={disabled || dead || switching}
                       onClick={() => setConfirmTarget(l)}
                     >
-                      {switching ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Crown className="h-3 w-3" />}
+                      {switching ? <RefreshCw className="size-3 animate-spin" /> : <Crown className="size-3" />}
                       Make primary
                     </Button>
                   )}
@@ -317,157 +283,120 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
             </div>
           );
         })}
-        {failover && links.length > 1 && (
-          <div className="rounded-lg border border-border/60 p-3 space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">Primary line</span>
-              <div className="flex gap-1">
-                {(['auto', 'manual'] as const).map((m) => {
-                  const on = failover.mode === m;
-                  return (
-                    <Button
-                      key={m}
-                      size="sm"
-                      variant={on ? 'secondary' : 'ghost'}
-                      className={'h-6 gap-1.5 px-2 text-[11px] ' + (on ? '' : 'text-muted-foreground')}
-                      disabled={disabled || failoverSwitching || on}
-                      onClick={() => handleFailoverMode(m)}
-                    >
-                      {m === 'auto' ? (
-                        <span
-                          className={
-                            'h-1.5 w-1.5 rounded-full ' +
-                            (on ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40')
-                          }
-                        />
-                      ) : (
-                        <Pin className="h-3 w-3" />
-                      )}
-                      {m === 'auto' ? 'Auto' : 'Pinned'}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              {failover.mode === 'auto'
-                ? `Prefers ${links.find((l) => l.interface === failover.preferred)?.label || failover.preferred}. Moves off a severely degraded line in ~1.5 min, back after ~10 min healthy.`
-                : 'Pinned by hand — automatic failover is paused. The router still fails over if the line drops entirely.'}
-            </p>
-            {failover.lastReason && (
-              <p className="text-[10px] text-muted-foreground">
-                <span className="font-medium text-foreground/80">Last switch</span>
-                {failover.lastSwitch && timeAgo(failover.lastSwitch) ? ` ${timeAgo(failover.lastSwitch)}` : ''}: {failover.lastReason}
-              </p>
-            )}
+      </div>
+
+      {failover && links.length > 1 && (
+        <div className="mt-4 border-t border-hairline-soft pt-4">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium text-ink">Primary line</span>
+            <Segmented
+              value={failover.mode}
+              disabled={disabled || failoverSwitching}
+              onChange={handleFailoverMode}
+              options={[
+                { value: 'auto', label: 'Auto', icon: <Led tone={failover.mode === 'auto' ? 'link' : 'off'} className="size-1.5" /> },
+                { value: 'manual', label: 'Pinned', icon: <Pin className="size-3" /> },
+              ]}
+            />
           </div>
-        )}
-        {cdn && cdn.groups.some((g) => g.routes > 0) && links.length > 1 && (
-          <div className="rounded-lg border border-border/60 p-3 space-y-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-medium">CDN traffic</span>
-              <span className="text-[10px] text-muted-foreground">tap a line to pin it</span>
-            </div>
-            {cdn.groups.filter((g) => g.routes > 0).map((g) => {
+          <p className="mt-1.5 text-xs text-ink-3">
+            {failover.mode === 'auto'
+              ? `Prefers ${preferredLabel}. Leaves a severely degraded line in ~1.5 min; returns after ~10 min healthy.`
+              : 'Pinned by hand — automatic failover is paused. The router still fails over if the line drops entirely.'}
+          </p>
+          {failover.lastReason && (
+            <p className="mt-1.5 text-xs text-ink-3">
+              <span className="font-medium text-ink-2">
+                Last switch{failover.lastSwitch && timeAgo(failover.lastSwitch) ? ` ${timeAgo(failover.lastSwitch)}` : ''}:
+              </span>{' '}
+              {failover.lastReason}
+            </p>
+          )}
+        </div>
+      )}
+
+      {cdn && cdn.groups.some((g) => g.routes > 0) && links.length > 1 && (
+        <div className="mt-4 space-y-3.5 border-t border-hairline-soft pt-4">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-sm font-medium text-ink">Streaming routes</span>
+            <span className="text-[11px] text-ink-4">tap a line to pin</span>
+          </div>
+          {cdn.groups
+            .filter((g) => g.routes > 0)
+            .map((g) => {
               const isAuto = g.mode !== 'manual';
+              const title = GROUP_TITLES[g.group] || g.group;
               return (
                 <div key={g.group} className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {GROUP_TITLES[g.group] || g.group}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant={isAuto ? 'secondary' : 'ghost'}
-                      className={
-                        'h-6 gap-1.5 px-2 text-[11px] ' +
-                        (isAuto ? '' : 'text-muted-foreground')
-                      }
+                    <span className="text-xs font-medium text-ink-3">{title}</span>
+                    <button
+                      type="button"
                       disabled={disabled || cdnSwitching || isAuto}
                       onClick={() => handleCdnSwitch(g, 'auto', 'Auto')}
+                      className={cn(
+                        'flex h-6 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-colors',
+                        isAuto ? 'bg-raised text-ink' : 'text-ink-4 hover:text-ink-2'
+                      )}
                     >
-                      <span
-                        className={
-                          'h-1.5 w-1.5 rounded-full ' +
-                          (isAuto ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40')
-                        }
-                      />
+                      <Led tone={isAuto ? 'link' : 'off'} className="size-1.5" />
                       Auto
-                    </Button>
+                    </button>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {links.map((l) => {
-                      const dead = l.status !== 'bound' || !l.alive;
+                      const dead = l.status !== 'bound' || l.alive === false;
                       const carrying = g.interface === l.interface;
                       const pinned = !isAuto && carrying;
                       const probe = g.health?.find((hh) => hh.interface === l.interface);
                       const st = probeState(probe);
                       return (
-                        <Button
+                        <button
                           key={l.interface}
-                          variant="outline"
+                          type="button"
                           disabled={disabled || cdnSwitching || dead}
                           title={
                             dead
                               ? 'Line has no internet'
                               : st === 'degraded'
-                                ? `This line is up, but the ${GROUP_TITLES[g.group] || g.group} probe is timing out on it — usually congestion, not an outage`
-                                : `Pin ${GROUP_TITLES[g.group] || g.group} to ${l.label || l.interface}`
+                                ? `This line is up, but the ${title} probe is timing out on it — usually congestion, not an outage`
+                                : `Pin ${title} to ${l.label || l.interface}`
                           }
                           onClick={() => handleCdnSwitch(g, l.interface, l.label || l.interface)}
-                          className={
-                            'h-auto flex-col items-start gap-0.5 px-2.5 py-1.5 ' +
-                            (carrying
-                              ? 'border-green-500/50 bg-green-500/5 hover:bg-green-500/10'
-                              : 'border-border/60')
-                          }
+                          className={cn(
+                            'flex flex-col items-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition-colors disabled:opacity-50',
+                            carrying ? 'border-link/40 bg-link/[0.06]' : 'border-hairline hover:bg-raised'
+                          )}
                         >
-                          <span className="flex w-full items-center gap-1.5 text-xs font-medium">
-                            {carrying && (
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500 animate-pulse" />
-                            )}
+                          <span className="flex w-full items-center gap-1.5 text-xs font-medium text-ink-2">
+                            {carrying && <Led tone="link" live className="size-1.5" />}
                             <span className="truncate">{l.label || l.interface}</span>
-                            {pinned && <Pin className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />}
+                            {pinned && <Pin className="ml-auto size-3 shrink-0 text-ink-4" />}
                           </span>
-                          <span
-                            className={
-                              'text-[11px] tabular-nums font-normal ' +
-                              (st ? PROBE_TONE[st] : 'text-muted-foreground')
-                            }
-                          >
+                          <span className={cn('num font-mono text-[11px]', st ? PROBE_TONE[st] : 'text-ink-4')}>
                             {st === 'up' ? `${probe?.pingMs} ms` : st ? PROBE_TEXT[st] : '—'}
                           </span>
-                        </Button>
+                        </button>
                       );
                     })}
                   </div>
-                  {isAuto && g.lastAutoReason && (
-                    <p className="text-[10px] text-muted-foreground">{g.lastAutoReason}</p>
-                  )}
+                  {isAuto && g.lastAutoReason && <p className="text-[11px] text-ink-4">{g.lastAutoReason}</p>}
                 </div>
               );
             })}
-            <p className="text-[10px] text-muted-foreground">
-              Auto escapes a dead path in ~2 min · a pinned line falls back only if it drops entirely
-            </p>
-          </div>
-        )}
-        <p className="text-[10px] text-muted-foreground">
-          The router fails over in ~20–30s if the primary stops passing traffic entirely.
-        </p>
-      </CardContent>
+        </div>
+      )}
+
+      <p className="mt-4 text-[11px] text-ink-4">The router itself fails over in ~20–30s if the primary stops passing traffic.</p>
 
       <AlertDialog open={confirmTarget !== null} onOpenChange={(o) => !o && setConfirmTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              Make {confirmTarget?.label || confirmTarget?.interface} the primary uplink?
-            </AlertDialogTitle>
+            <AlertDialogTitle>Make {confirmTarget?.label || confirmTarget?.interface} the primary line?</AlertDialogTitle>
             <AlertDialogDescription>
-              All internet traffic will switch to this line within a few seconds. The other
-              uplink stays connected as the automatic backup. Active downloads and calls may
-              briefly stall during the switch. Choosing a line by hand pins it and pauses
-              automatic failover — switch the Primary line back to Auto to resume it.
+              All internet traffic switches to this line within a few seconds, and the other stays connected as the
+              backup. Downloads and calls may stall briefly. Choosing a line by hand pins it and pauses automatic
+              failover — set Primary line back to Auto to resume it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -476,6 +405,6 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </Panel>
   );
 }

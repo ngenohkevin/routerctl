@@ -71,6 +71,39 @@ export interface WANLink {
 
 export type LineState = 'up' | 'degraded' | 'severe' | 'down';
 
+// Wi-Fi radios (agent GET /wifi).
+export interface WiFiRadio {
+  interface: string; // "wifi1"
+  ssid?: string;
+  band: string; // "2.4 GHz" | "5 GHz"
+  running: boolean;
+  state?: string;
+  channel?: string; // raw, e.g. "5180/ax/Ceee/I"
+  frequency?: number;
+  number?: number; // IEEE channel, e.g. 36
+  widthMhz?: number;
+  dfs: boolean; // radar-shared: radar forces the radio off, dropping clients
+  indoor: boolean;
+  txPower?: number;
+  clients: number;
+  skipDfs?: string;
+  disabled: boolean;
+}
+
+export interface WiFiEvent {
+  time: string; // RFC3339
+  interface: string;
+  band?: string;
+  kind: 'radar' | 'channel' | 'down' | 'up';
+  message: string;
+}
+
+export interface WiFiStatus {
+  radios: WiFiRadio[];
+  events: WiFiEvent[] | null;
+  checkedAt?: string;
+}
+
 export interface LineQuality {
   interface: string;
   label?: string;

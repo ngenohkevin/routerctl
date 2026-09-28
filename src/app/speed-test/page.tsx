@@ -2,9 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
-  Gauge, ArrowLeft, RefreshCw, Play, Trash2, Radio,
+  RefreshCw, Play, Trash2, Radio,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { AgentStatus } from '@/components/agent-status';
+import { AppShell } from '@/components/shell/app-shell';
+import { PageHeader } from '@/components/shell/page-header';
 import { SpeedGauge } from '@/components/speed-gauge';
 import { SpeedResultCards } from '@/components/speed-result-cards';
 import { LatencyTable } from '@/components/latency-table';
@@ -22,13 +22,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api, isAuthenticated } from '@/lib/api';
 import { UplinksCard } from '@/components/uplinks-card';
 import { toast } from 'sonner';
-import type { HealthStatus, NetSpeedTestResult, LatencyTarget, SpeedTestServer } from '@/types';
+import type { NetSpeedTestResult, LatencyTarget, SpeedTestServer } from '@/types';
 
 type SpeedPhase = 'idle' | 'ping' | 'download' | 'upload' | 'done';
 
 export default function SpeedTestPage() {
   const router = useRouter();
-  const [health, setHealth] = useState<HealthStatus | null>(null);
 
   // Speed test state
   const [phase, setPhase] = useState<SpeedPhase>('idle');
@@ -70,7 +69,6 @@ export default function SpeedTestPage() {
   }, [router]);
 
   useEffect(() => {
-    api.getHealth().then(setHealth).catch(() => null);
     fetchHistory();
     loadServers();
   }, []);
@@ -222,30 +220,16 @@ export default function SpeedTestPage() {
     : 100;
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
-            </Link>
-            <Gauge className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-            <div>
-              <h1 className="text-lg sm:text-2xl font-bold">Speed Test</h1>
-              <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
-                Network performance from Raspberry Pi
-              </p>
-            </div>
-          </div>
-          <AgentStatus health={health} isConnected={!!health?.routerConnected} />
-        </div>
+    <AppShell>
+      <div className="space-y-6">
+        <PageHeader
+          title="Speed test"
+          description="Measured from the Raspberry Pi — test either line on its own, check streaming, latency and history."
+        />
 
         {/* Tabs */}
         <Tabs defaultValue="speedtest">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid h-10 w-full grid-cols-4 border border-hairline bg-inset p-0.5 md:w-auto md:inline-grid">
             <TabsTrigger value="speedtest">Speed Test</TabsTrigger>
             <TabsTrigger value="streaming">Streaming</TabsTrigger>
             <TabsTrigger value="latency">Latency</TabsTrigger>
@@ -453,6 +437,6 @@ export default function SpeedTestPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AppShell>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Power, AlertTriangle, Loader2 } from 'lucide-react';
 import {
   AlertDialog,
@@ -18,9 +18,11 @@ import { Button } from '@/components/ui/button';
 interface RebootDialogProps {
   onReboot: () => Promise<void>;
   disabled?: boolean;
+  /** Custom trigger (e.g. a nav-rail row); defaults to a small red button. */
+  trigger?: ReactNode;
 }
 
-export function RebootDialog({ onReboot, disabled }: RebootDialogProps) {
+export function RebootDialog({ onReboot, disabled, trigger }: RebootDialogProps) {
   const [open, setOpen] = useState(false);
   const [isRebooting, setIsRebooting] = useState(false);
 
@@ -38,11 +40,13 @@ export function RebootDialog({ onReboot, disabled }: RebootDialogProps) {
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button variant="destructive" size="sm" className="h-8 px-2 sm:px-3" disabled={disabled}>
-          <Power className="h-4 w-4 sm:mr-2" />
-          <span className="hidden sm:inline">Reboot</span>
-        </Button>
+      <AlertDialogTrigger asChild disabled={disabled}>
+        {trigger ?? (
+          <Button variant="destructive" size="sm" className="h-8 px-2 sm:px-3" disabled={disabled}>
+            <Power className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Reboot</span>
+          </Button>
+        )}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>

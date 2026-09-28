@@ -1,34 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
-  Wifi,
-  Cable,
   Ban,
+  Cable,
   Check,
-  MoreVertical,
-  Gauge,
-  Signal,
-  SignalHigh,
-  SignalMedium,
-  SignalLow,
-  Clock,
-  Zap,
-  Power,
   Edit3,
-  WifiOff,
-  ArrowDown,
-  ArrowUp,
-  ShieldOff,
+  Gamepad2,
+  Gauge,
+  Laptop,
+  Monitor,
+  MoreHorizontal,
+  Power,
+  Printer,
+  Router as RouterIcon,
   Shield,
+  ShieldOff,
+  Smartphone,
+  Speaker,
+  Tablet,
+  Tv,
+  Watch,
+  WifiOff,
+  Zap,
+  type LucideIcon,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -42,46 +44,46 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import type { Device } from '@/types';
-import { cn, getSignalQuality, formatBandwidth, formatDuration, prettyBand, formatByteCount } from '@/lib/utils';
+import { cn, formatBandwidth, formatDuration, prettyBand } from '@/lib/utils';
 import { timeAgo } from '@/components/device-detail-dialog';
 
-// Check if MAC uses randomized/private addressing (2nd hex digit is 2, 6, A, or E)
+// Randomized/private MACs (2nd hex digit 2, 6, A or E) are phones and laptops on Wi-Fi.
 function hasRandomizedMAC(mac: string): boolean {
   if (mac.length < 2) return false;
-  const secondChar = mac[1].toUpperCase();
-  return secondChar === '2' || secondChar === '6' || secondChar === 'A' || secondChar === 'E';
+  const c = mac[1].toUpperCase();
+  return c === '2' || c === '6' || c === 'A' || c === 'E';
 }
 
-function formatBytes(bytes: string | undefined): string {
-  if (!bytes) return '0 B';
-  const num = parseInt(bytes, 10);
-  if (isNaN(num)) return '0 B';
-
-  if (num >= 1024 * 1024 * 1024) {
-    return `${(num / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-  }
-  if (num >= 1024 * 1024) {
-    return `${(num / (1024 * 1024)).toFixed(1)} MB`;
-  }
-  if (num >= 1024) {
-    return `${(num / 1024).toFixed(1)} KB`;
-  }
-  return `${num} B`;
+function formatRate(rate: string | undefined): string | null {
+  const n = parseInt(rate || '0', 10);
+  if (!n) return null;
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB/s`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB/s`;
+  return `${n} B/s`;
 }
 
-// Format rate as speed (bytes/sec to KB/s or MB/s)
-function formatRate(rate: string | undefined): string {
-  if (!rate) return '0 B/s';
-  const num = parseInt(rate, 10);
-  if (isNaN(num) || num === 0) return '0 B/s';
+/** Device glyph from its detected type — a drawn icon, not an emoji. */
+function glyphFor(d: Device): LucideIcon {
+  const t = `${d.deviceType || ''} ${d.deviceModel || ''}`.toLowerCase();
+  if (d.wanSide) return RouterIcon;
+  if (/(tv|roku|chromecast|fire ?stick|apple tv|box)/.test(t)) return Tv;
+  if (/(watch)/.test(t)) return Watch;
+  if (/(tablet|ipad)/.test(t)) return Tablet;
+  if (/(phone|mobile|android|iphone|galaxy|pixel)/.test(t)) return Smartphone;
+  if (/(laptop|macbook|notebook|computer|pc|desktop|imac|mac)/.test(t)) return Laptop;
+  if (/(printer)/.test(t)) return Printer;
+  if (/(speaker|sonos|echo|homepod|audio)/.test(t)) return Speaker;
+  if (/(console|playstation|xbox|nintendo|switch)/.test(t)) return Gamepad2;
+  if (/(router|access point|ap|raspberry|server)/.test(t)) return RouterIcon;
+  return Monitor;
+}
 
-  if (num >= 1024 * 1024) {
-    return `${(num / (1024 * 1024)).toFixed(1)} MB/s`;
-  }
-  if (num >= 1024) {
-    return `${(num / 1024).toFixed(1)} KB/s`;
-  }
-  return `${num} B/s`;
+function signalBars(dbm?: number): { n: number; tone: string } {
+  if (dbm === undefined || dbm === null) return { n: 0, tone: 'bg-ink-4' };
+  if (dbm >= -55) return { n: 4, tone: 'bg-link' };
+  if (dbm >= -65) return { n: 3, tone: 'bg-link' };
+  if (dbm >= -72) return { n: 2, tone: 'bg-amber' };
+  return { n: 1, tone: 'bg-fault' };
 }
 
 interface DeviceCardProps {
@@ -98,6 +100,10 @@ interface DeviceCardProps {
   onShowDetails?: (mac: string) => void;
 }
 
+/**
+ * One device. Leads with who it is and whether it's moving data; everything
+ * else (MAC, vendor, totals) lives in the detail dialog one tap away.
+ */
 export function DeviceCard({
   device,
   onBlock,
@@ -114,375 +120,231 @@ export function DeviceCard({
   const [isLoading, setIsLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'block' | 'disconnect' | null>(null);
 
-  // WiFi devices have signal strength data, or are mobile devices, or have randomized MACs (typically WiFi)
   const mobileTypes = ['phone', 'tablet', 'mobile', 'watch', 'apple', 'android'];
-  // Check actual MAC pattern (survives mDNS enrichment that may change vendor from "Private Address")
-  const isRandomMAC = hasRandomizedMAC(device.mac);
-  // Randomized MACs are used by phones AND modern laptops on WiFi, so assume WiFi for them
-  const isWifi = !!device.signalStrength ||
+  const isWifi =
+    !!device.signalStrength ||
     mobileTypes.includes(device.deviceType?.toLowerCase() || '') ||
-    isRandomMAC;
+    hasRandomizedMAC(device.mac);
   const isWan = device.wanSide || device.interface === 'WAN';
   const isOnline = device.status === 'bound' || device.status === 'dynamic';
-  const signalQuality = getSignalQuality(device.signalStrength);
+  const name =
+    device.comment || device.hostname || (isWan ? 'Gateway' : device.deviceModel || device.vendor) || device.ip;
+  const kind = [device.deviceModel && device.deviceModel !== name ? device.deviceModel : device.deviceType, device.vendor]
+    .filter((v, i, a) => v && a.indexOf(v) === i && v !== name)
+    .join(' · ');
+  const Glyph = glyphFor(device);
+  const down = formatRate(device.rateIn);
+  const up = formatRate(device.rateOut);
+  const active = !!(down || up);
+  const bars = signalBars(device.signalDbm);
+  const band = prettyBand(device.band);
+  const hasPriority = device.priority > 0 && device.priority < 8;
 
-  const handleBlock = async () => {
+  const run = async (fn: () => Promise<void>) => {
     setIsLoading(true);
     try {
-      await onBlock(device.mac);
+      await fn();
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleUnblock = async () => {
-    setIsLoading(true);
-    try {
-      await onUnblock(device.mac);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    if (!onDisconnect) return;
-    setIsLoading(true);
-    try {
-      await onDisconnect(device.mac);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleWakeOnLan = async () => {
-    if (!onWakeOnLan) return;
-    setIsLoading(true);
-    try {
-      await onWakeOnLan(device.mac);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const SignalIcon = {
-    excellent: SignalHigh,
-    good: SignalHigh,
-    fair: SignalMedium,
-    poor: SignalLow,
-    unknown: Signal,
-  }[signalQuality];
-
-  const signalColor = {
-    excellent: 'text-green-500',
-    good: 'text-green-400',
-    fair: 'text-yellow-500',
-    poor: 'text-red-500',
-    unknown: 'text-muted-foreground',
-  }[signalQuality];
+  const openDetails = onShowDetails ? () => onShowDetails(device.mac) : undefined;
 
   return (
-    <Card
+    <article
       className={cn(
-        'transition-all duration-200 hover:shadow-md overflow-hidden min-w-0',
-        device.isBlocked && 'opacity-60 border-destructive/50'
+        'group relative flex min-w-0 flex-col rounded-xl border bg-panel p-4 transition-colors duration-150',
+        device.isBlocked ? 'border-fault/35' : 'border-hairline',
+        openDetails && 'hover:border-hairline-strong',
+        !isOnline && 'opacity-70'
       )}
     >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {!isOnline ? (
-            <WifiOff className="h-4 w-4 shrink-0 text-muted-foreground" />
-          ) : isWifi ? (
-            <Wifi className="h-4 w-4 shrink-0 text-blue-500" />
-          ) : (
-            <Cable className="h-4 w-4 shrink-0 text-green-500" />
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            'flex size-9 shrink-0 items-center justify-center rounded-lg border border-hairline bg-raised',
+            device.isBlocked ? 'text-fault' : isOnline ? 'text-ink-2' : 'text-ink-4'
           )}
-          <CardTitle
-            className={cn('text-sm font-medium truncate', onShowDetails && 'cursor-pointer hover:underline')}
-            onClick={onShowDetails ? () => onShowDetails(device.mac) : undefined}
-          >
-            {device.comment || device.hostname || (isWan ? 'Gateway' : (device.deviceModel || device.vendor)) || device.ip}
-          </CardTitle>
-        </div>
+        >
+          <Glyph className="size-[18px]" />
+        </span>
+        <button
+          type="button"
+          onClick={openDetails}
+          disabled={!openDetails}
+          className="min-w-0 flex-1 text-left after:absolute after:inset-0 after:content-[''] disabled:after:hidden"
+          aria-label={`Details for ${name}`}
+        >
+          <div className="truncate text-[15px] font-medium leading-5 text-ink">{name}</div>
+          <div className="mt-0.5 truncate text-xs text-ink-3">{kind || (isWan ? 'Upstream gateway' : 'Unknown device')}</div>
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreVertical className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="relative z-10 -mr-1.5 -mt-1 size-9 text-ink-3" aria-label={`Actions for ${name}`}>
+              <MoreHorizontal className="size-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="w-56">
             {onRename && (
               <DropdownMenuItem
                 onClick={() => onRename(device.mac, device.comment || device.hostname || device.deviceModel || device.vendor || '')}
               >
-                <Edit3 className="mr-2 h-4 w-4" />
-                Rename Device
+                <Edit3 className="size-4" /> Rename
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={() => onSetBandwidth(device.mac)}>
-              <Gauge className="mr-2 h-4 w-4" />
-              Set Bandwidth Limit
+              <Gauge className="size-4" /> Bandwidth limit
             </DropdownMenuItem>
             {device.isExempt && onRemoveExemption ? (
               <DropdownMenuItem onClick={() => onRemoveExemption(device.mac)}>
-                <ShieldOff className="mr-2 h-4 w-4" />
-                Remove Exemption
+                <ShieldOff className="size-4" /> Remove exemption
               </DropdownMenuItem>
             ) : !device.isExempt && onExempt ? (
               <DropdownMenuItem onClick={() => onExempt(device.mac)}>
-                <Shield className="mr-2 h-4 w-4 text-emerald-500" />
-                Exempt from Default Limit
+                <Shield className="size-4" /> Exempt from default limit
               </DropdownMenuItem>
             ) : null}
             {onBoost && (
               <DropdownMenuItem onClick={() => onBoost(device.mac)}>
-                <Zap className={cn("mr-2 h-4 w-4", device.priority > 0 && device.priority < 8 ? "text-orange-500" : "text-yellow-500")} />
-                {device.priority > 0 && device.priority < 8 ? `Priority: ${device.priority}/8` : 'Boost Priority'}
+                <Zap className="size-4" /> {hasPriority ? `Priority ${device.priority}/8` : 'Boost priority'}
               </DropdownMenuItem>
             )}
             {isWifi && onDisconnect && (
-              <DropdownMenuItem
-                onClick={() => setConfirmAction('disconnect')}
-                disabled={isLoading}
-              >
-                <WifiOff className="mr-2 h-4 w-4" />
-                Disconnect WiFi
+              <DropdownMenuItem onClick={() => setConfirmAction('disconnect')} disabled={isLoading}>
+                <WifiOff className="size-4" /> Disconnect from Wi-Fi
               </DropdownMenuItem>
             )}
             {onWakeOnLan && !isWifi && (
-              <DropdownMenuItem
-                onClick={handleWakeOnLan}
-                disabled={isLoading}
-              >
-                <Power className="mr-2 h-4 w-4 text-green-500" />
-                Wake on LAN
+              <DropdownMenuItem onClick={() => onWakeOnLan && run(() => onWakeOnLan(device.mac))} disabled={isLoading}>
+                <Power className="size-4" /> Wake on LAN
               </DropdownMenuItem>
             )}
+            <DropdownMenuSeparator />
             {device.isBlocked ? (
-              <DropdownMenuItem onClick={handleUnblock} disabled={isLoading}>
-                <Check className="mr-2 h-4 w-4" />
-                Unblock Device
+              <DropdownMenuItem onClick={() => run(() => onUnblock(device.mac))} disabled={isLoading}>
+                <Check className="size-4" /> Unblock
               </DropdownMenuItem>
             ) : (
-              <DropdownMenuItem
-                onClick={() => setConfirmAction('block')}
-                disabled={isLoading}
-                className="text-destructive"
-              >
-                <Ban className="mr-2 h-4 w-4" />
-                Block Device
+              <DropdownMenuItem onClick={() => setConfirmAction('block')} disabled={isLoading} variant="destructive">
+                <Ban className="size-4" /> Block
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-        <AlertDialog open={confirmAction !== null} onOpenChange={(open) => !open && setConfirmAction(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {confirmAction === 'block' ? 'Block this device?' : 'Disconnect this device?'}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {confirmAction === 'block'
-                  ? `${device.comment || device.hostname || device.ip} will lose all network access until you unblock it.`
-                  : `${device.comment || device.hostname || device.ip} will be kicked off WiFi. It can reconnect immediately unless you also block it.`}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                className={confirmAction === 'block' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
-                onClick={() => {
-                  const action = confirmAction;
-                  setConfirmAction(null);
-                  if (action === 'block') void handleBlock();
-                  else if (action === 'disconnect') void handleDisconnect();
-                }}
-              >
-                {confirmAction === 'block' ? 'Block' : 'Disconnect'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2 text-sm">
-          {/* Connection type (WiFi/Ethernet) - only show for online devices */}
-          {isOnline ? (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Connection</span>
-              <div className="flex items-center gap-2">
-                {isWifi ? (
-                  <>
-                    <Wifi className="h-4 w-4 text-blue-500" />
-                    <span className="text-blue-500 font-medium">
-                      WiFi{prettyBand(device.band) ? ` · ${prettyBand(device.band)}` : ''}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Cable className="h-4 w-4 text-green-500" />
-                    <span className="text-green-500 font-medium">Ethernet</span>
-                  </>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Status</span>
-              <span className="text-muted-foreground">Offline</span>
-            </div>
-          )}
-          {/* Device type icon */}
-          <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">Device</span>
-            <div className="flex items-center gap-2">
-              {isWan ? (
-                <span className="text-xl" role="img" aria-label="wan">🌐</span>
-              ) : device.deviceIcon && device.deviceIcon !== '❓' ? (
-                <span className="text-xl" role="img" aria-label={device.deviceType || 'device'}>
-                  {device.deviceIcon}
+      </div>
+
+      {/* Address + link */}
+      <div className="mt-3.5 flex items-center justify-between gap-3">
+        <span className="num truncate font-mono text-[13px] text-ink-2">{device.ip}</span>
+        {isOnline ? (
+          isWifi ? (
+            <span className="flex shrink-0 items-center gap-1.5" title={device.signalDbm ? `${device.signalDbm} dBm` : 'Wi-Fi'}>
+              {device.signalDbm !== undefined && device.signalDbm !== null && (
+                <span className={cn('num font-mono text-xs', bars.n <= 1 ? 'text-fault' : bars.n === 2 ? 'text-amber' : 'text-ink-3')}>
+                  {device.signalDbm} dBm
                 </span>
-              ) : null}
-              {device.deviceModel ? (
-                <div className="flex flex-col items-end">
-                  <span className="text-xs font-medium">{device.deviceModel}</span>
-                  <span className="text-[10px] text-muted-foreground capitalize">{device.deviceType}</span>
-                </div>
-              ) : (
-                <span className="text-xs capitalize">{device.deviceType || 'Unknown'}</span>
               )}
-            </div>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">IP Address</span>
-            <span className="font-mono">{device.ip}</span>
-          </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground shrink-0">MAC</span>
-            <span className="font-mono text-xs truncate">{device.mac}</span>
-          </div>
-          {device.vendor && (
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground shrink-0">Vendor</span>
-              <span className="text-xs truncate">{device.vendor}</span>
-            </div>
+              <span className="flex h-3 items-end gap-[2px]" aria-hidden>
+                {[1, 2, 3, 4].map((i) => (
+                  <span
+                    key={i}
+                    className={cn('w-[3px] rounded-[1px]', i <= bars.n ? bars.tone : 'bg-hairline-strong')}
+                    style={{ height: `${i * 25}%` }}
+                  />
+                ))}
+              </span>
+            </span>
+          ) : (
+            <span className="flex shrink-0 items-center gap-1.5 text-xs text-ink-3">
+              <Cable className="size-3.5 text-link" /> Wired
+            </span>
+          )
+        ) : (
+          <span className="shrink-0 text-xs text-ink-4">
+            {timeAgo(device.lastSeen) ? `seen ${timeAgo(device.lastSeen)}` : 'offline'}
+          </span>
+        )}
+      </div>
+
+      {/* Live traffic — only when it's moving */}
+      <div className="mt-2 flex items-center gap-3 text-xs">
+        {active ? (
+          <>
+            <span className="num font-mono text-ink">↓ {down ?? '0 B/s'}</span>
+            <span className="num font-mono text-ink-3">↑ {up ?? '0 B/s'}</span>
+          </>
+        ) : (
+          <span className="text-ink-4">
+            {isOnline ? (device.uptimeSeconds > 0 ? `idle · online ${formatDuration(device.uptimeSeconds)}` : 'idle') : 'not connected'}
+          </span>
+        )}
+      </div>
+
+      {/* State chips */}
+      {(device.isBlocked || device.isExempt || hasPriority || device.hasBWLimit || (isOnline && isWifi && band)) && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {device.isBlocked && <Chip tone="fault">Blocked</Chip>}
+          {isOnline && isWifi && band && <Chip tone="air">{band}</Chip>}
+          {hasPriority && (
+            <Chip tone="amber">
+              <Zap className="size-3" /> Priority {device.priority}
+            </Chip>
           )}
-          {device.interface && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Interface</span>
-              <span>{device.interface}</span>
-            </div>
+          {device.isExempt && <Chip tone="link">Exempt</Chip>}
+          {device.hasBWLimit && !device.isExempt && (
+            <Chip>{device.isDefaultLimit ? 'Default limit' : `${formatBandwidth(device.downloadLimit || '0')} limit`}</Chip>
           )}
-          {device.uptimeSeconds > 0 && (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Connected</span>
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3 text-muted-foreground" />
-                <span>{formatDuration(device.uptimeSeconds)}</span>
-              </div>
-            </div>
-          )}
-          {isWifi && device.signalStrength && (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Signal</span>
-              <div className="flex items-center gap-1">
-                <SignalIcon className={cn('h-4 w-4', signalColor)} />
-                <span>
-                  {device.signalDbm
-                    ? `${device.signalDbm} dBm${device.txMbps ? ` · ${Math.round(device.txMbps)} Mbps` : ''}`
-                    : device.signalStrength}
-                </span>
-              </div>
-            </div>
-          )}
-          {!isOnline && timeAgo(device.lastSeen) && (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Last seen</span>
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3 text-muted-foreground" />
-                <span>{timeAgo(device.lastSeen)}</span>
-              </div>
-            </div>
-          )}
-          {/* Real-time speed - only show if device has queue stats */}
-          {(device.rateIn || device.rateOut) && (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Speed</span>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="flex items-center gap-0.5 text-green-500">
-                  <ArrowDown className="h-3 w-3" />
-                  {formatRate(device.rateIn)}
-                </span>
-                <span className="flex items-center gap-0.5 text-blue-500">
-                  <ArrowUp className="h-3 w-3" />
-                  {formatRate(device.rateOut)}
-                </span>
-              </div>
-            </div>
-          )}
-          {/* Per-client WiFi session transfer (since association) */}
-          {((device.wifiDownBytes ?? 0) > 0 || (device.wifiUpBytes ?? 0) > 0) && (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">WiFi session</span>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="flex items-center gap-0.5 text-green-500">
-                  <ArrowDown className="h-3 w-3" />
-                  {formatByteCount(device.wifiDownBytes)}
-                </span>
-                <span className="flex items-center gap-0.5 text-blue-500">
-                  <ArrowUp className="h-3 w-3" />
-                  {formatByteCount(device.wifiUpBytes)}
-                </span>
-              </div>
-            </div>
-          )}
-          {/* Total bandwidth usage */}
-          {(device.bytesIn || device.bytesOut) && (
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Total</span>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="flex items-center gap-0.5 text-green-500/70">
-                  <ArrowDown className="h-3 w-3" />
-                  {formatBytes(device.bytesIn)}
-                </span>
-                <span className="flex items-center gap-0.5 text-blue-500/70">
-                  <ArrowUp className="h-3 w-3" />
-                  {formatBytes(device.bytesOut)}
-                </span>
-              </div>
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2 pt-2">
-            {device.isBlocked && (
-              <Badge variant="destructive" className="text-xs">
-                Blocked
-              </Badge>
-            )}
-            {device.isExempt && (
-              <Badge variant="outline" className="text-xs text-emerald-500 border-emerald-500">
-                Exempt
-              </Badge>
-            )}
-            {device.priority > 0 && device.priority < 8 && (
-              <Badge variant="outline" className="text-xs text-yellow-500 border-yellow-500">
-                <Zap className="h-3 w-3 mr-0.5" />
-                Priority {device.priority}
-              </Badge>
-            )}
-            {device.hasBWLimit && !device.isExempt && (
-              <Badge variant="secondary" className="text-xs">
-                {device.isDefaultLimit
-                  ? 'Default limit'
-                  : `${formatBandwidth(device.downloadLimit || '0')} limit`}
-              </Badge>
-            )}
-            {(device.status === 'bound' || device.status === 'dynamic') && (
-              <Badge variant="outline" className="text-xs text-green-500 border-green-500">
-                Active
-              </Badge>
-            )}
-          </div>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      <AlertDialog open={confirmAction !== null} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmAction === 'block' ? `Block ${name}?` : `Disconnect ${name}?`}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction === 'block'
+                ? 'It loses all network access until you unblock it.'
+                : 'It is kicked off Wi-Fi and can reconnect straight away unless you also block it.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={confirmAction === 'block' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : undefined}
+              onClick={() => {
+                const action = confirmAction;
+                setConfirmAction(null);
+                if (action === 'block') void run(() => onBlock(device.mac));
+                else if (action === 'disconnect' && onDisconnect) void run(() => onDisconnect(device.mac));
+              }}
+            >
+              {confirmAction === 'block' ? 'Block' : 'Disconnect'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </article>
+  );
+}
+
+function Chip({ children, tone }: { children: ReactNode; tone?: 'fault' | 'air' | 'amber' | 'link' }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] font-medium',
+        tone === 'fault'
+          ? 'border-fault/35 text-fault'
+          : tone === 'air'
+            ? 'border-air/30 text-air'
+            : tone === 'amber'
+              ? 'border-amber/35 text-amber'
+              : tone === 'link'
+                ? 'border-link/35 text-link'
+                : 'border-hairline-strong text-ink-3'
+      )}
+    >
+      {children}
+    </span>
   );
 }

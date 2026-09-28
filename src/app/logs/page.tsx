@@ -2,10 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
-  ScrollText,
-  ArrowLeft,
   RefreshCw,
   Search,
   Filter,
@@ -13,7 +10,7 @@ import {
   Pause,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,10 +31,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { AgentStatus } from '@/components/agent-status';
+import { AppShell } from '@/components/shell/app-shell';
+import { PageHeader } from '@/components/shell/page-header';
+import { Stat, StatStrip } from '@/components/shell/stat';
 import { api, isAuthenticated } from '@/lib/api';
 import { toast } from 'sonner';
-import type { LogEntry, HealthStatus } from '@/types';
+import type { LogEntry } from '@/types';
 
 // Topic badge colors based on severity/type
 const topicColors: Record<string, string> = {
@@ -69,7 +68,6 @@ export default function LogsPage() {
   const router = useRouter();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
-  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -94,14 +92,12 @@ export default function LogsPage() {
     setIsRefreshing(true);
     try {
       const topicFilter = selectedTopic !== 'all' ? selectedTopic : undefined;
-      const [logsRes, topicsRes, healthRes] = await Promise.all([
+      const [logsRes, topicsRes] = await Promise.all([
         api.getLogs(limit, topicFilter).catch(() => ({ logs: [], count: 0 })),
         api.getLogTopics().catch(() => ({ topics: [] })),
-        api.getHealth().catch(() => null),
       ]);
       setLogs(logsRes.logs || []);
       setTopics(topicsRes.topics || []);
-      setHealth(healthRes);
     } catch {
       toast.error('Failed to fetch logs');
     } finally {
@@ -148,79 +144,29 @@ export default function LogsPage() {
   }, [logs]);
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
-            </Link>
-            <ScrollText className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-            <div>
-              <h1 className="text-lg sm:text-2xl font-bold">Router Logs</h1>
-              <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
-                System logs and events
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <AgentStatus health={health} isConnected={!!health?.routerConnected} />
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-2 sm:px-3"
-              onClick={() => fetchData()}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 sm:mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
+    <AppShell>
+      <div className="space-y-6">
+        <PageHeader
+          title="Router logs"
+          description="What the router has been saying — logins, DHCP, Wi-Fi and link events."
+          actions={
+            <Button variant="outline" size="sm" className="h-9 gap-2" onClick={() => fetchData()} disabled={isRefreshing}>
+              <RefreshCw className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
-          </div>
-        </div>
+          }
+        />
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Logs
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.total}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Errors
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-500">{stats.errors}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Warnings
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-500">
-                {stats.warnings}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <StatStrip count={3}>
+          <Stat label="Entries" value={stats.total} />
+          <Stat label="Errors" value={stats.errors} tone={stats.errors > 0 ? 'fault' : 'ink'} />
+          <Stat label="Warnings" value={stats.warnings} tone={stats.warnings > 0 ? 'amber' : 'ink'} />
+        </StatStrip>
 
         {/* Filters */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col sm:flex-row gap-4">
+        <Card className="py-3 md:py-3">
+          <CardContent>
+            <div className="flex flex-col gap-3 sm:flex-row">
               {/* Search */}
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -280,17 +226,41 @@ export default function LogsPage() {
                   ) : (
                     <Pause className="h-3 w-3 text-muted-foreground" />
                   )}
-                  <span className="hidden sm:inline">Auto</span>
+                  <span>Auto-refresh</span>
                 </Label>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Logs Table */}
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
+        {/* Logs — stacked on phones so the message gets the width, table from md */}
+        <Card className="py-0 md:py-0">
+          <CardContent className="p-0 md:p-0">
+            <ul className="divide-y divide-hairline-soft md:hidden">
+              {isLoading ? (
+                [...Array(8)].map((_, i) => (
+                  <li key={i} className="space-y-2 px-4 py-3">
+                    <Skeleton className="h-3 w-1/3" />
+                    <Skeleton className="h-4 w-full" />
+                  </li>
+                ))
+              ) : filteredLogs.length === 0 ? (
+                <li className="px-4 py-10 text-center text-sm text-ink-3">No logs found</li>
+              ) : (
+                filteredLogs.map((log) => (
+                  <li key={log.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="num font-mono text-[11px] text-ink-4">{log.time}</span>
+                      <Badge variant="outline" className={`text-[10px] ${getTopicColor(log.topics)}`}>
+                        {log.topics}
+                      </Badge>
+                    </div>
+                    <p className="mt-1.5 break-words font-mono text-[12.5px] leading-5 text-ink-2">{log.message}</p>
+                  </li>
+                ))
+              )}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -346,6 +316,6 @@ export default function LogsPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </AppShell>
   );
 }

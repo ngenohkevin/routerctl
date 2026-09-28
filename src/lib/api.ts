@@ -25,6 +25,7 @@ import type {
   WANLink,
   CDNSteering,
   WANFailoverStatus,
+  WiFiStatus,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -485,6 +486,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ interface: iface }),
     });
+  },
+
+  async getWiFi(): Promise<WiFiStatus> {
+    return fetchApi<WiFiStatus>('/wifi');
   },
 
   async getWanFailover(): Promise<WANFailoverStatus> {

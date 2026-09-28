@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Router, Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { Mark } from '@/components/shell/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -49,16 +50,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <Router className="h-12 w-12 text-primary" />
-          </div>
-          <CardTitle className="text-2xl">RouterCtl</CardTitle>
-          <CardDescription>
-            Sign in with your MikroTik router credentials
-          </CardDescription>
+    <div className="flex min-h-dvh items-center justify-center bg-canvas p-4">
+      <Card className="w-full max-w-sm gap-5 py-6 md:py-7">
+        <CardHeader className="items-center text-center">
+          <Mark className="mx-auto mb-2 size-11 text-ink-2" />
+          <CardTitle className="text-[22px] font-semibold tracking-[-0.015em]">RouterCtl</CardTitle>
+          <CardDescription className="text-ink-3">Sign in with the router’s admin account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
