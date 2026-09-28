@@ -6,24 +6,13 @@ import {
   Cable,
   Check,
   Edit3,
-  Gamepad2,
   Gauge,
-  Laptop,
-  Monitor,
   MoreHorizontal,
   Power,
-  Printer,
-  Router as RouterIcon,
   Shield,
   ShieldOff,
-  Smartphone,
-  Speaker,
-  Tablet,
-  Tv,
-  Watch,
   WifiOff,
   Zap,
-  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,6 +35,7 @@ import {
 import type { Device } from '@/types';
 import { cn, formatBandwidth, formatDuration, prettyBand } from '@/lib/utils';
 import { timeAgo } from '@/components/device-detail-dialog';
+import { displayName, glyphFor, identityLine } from '@/lib/device';
 
 // Randomized/private MACs (2nd hex digit 2, 6, A or E) are phones and laptops on Wi-Fi.
 function hasRandomizedMAC(mac: string): boolean {
@@ -60,22 +50,6 @@ function formatRate(rate: string | undefined): string | null {
   if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB/s`;
   if (n >= 1024) return `${Math.round(n / 1024)} KB/s`;
   return `${n} B/s`;
-}
-
-/** Device glyph from its detected type — a drawn icon, not an emoji. */
-function glyphFor(d: Device): LucideIcon {
-  const t = `${d.deviceType || ''} ${d.deviceModel || ''}`.toLowerCase();
-  if (d.wanSide) return RouterIcon;
-  if (/(tv|roku|chromecast|fire ?stick|apple tv|box)/.test(t)) return Tv;
-  if (/(watch)/.test(t)) return Watch;
-  if (/(tablet|ipad)/.test(t)) return Tablet;
-  if (/(phone|mobile|android|iphone|galaxy|pixel)/.test(t)) return Smartphone;
-  if (/(laptop|macbook|notebook|computer|pc|desktop|imac|mac)/.test(t)) return Laptop;
-  if (/(printer)/.test(t)) return Printer;
-  if (/(speaker|sonos|echo|homepod|audio)/.test(t)) return Speaker;
-  if (/(console|playstation|xbox|nintendo|switch)/.test(t)) return Gamepad2;
-  if (/(router|access point|ap|raspberry|server)/.test(t)) return RouterIcon;
-  return Monitor;
 }
 
 function signalBars(dbm?: number): { n: number; tone: string } {
@@ -127,11 +101,8 @@ export function DeviceCard({
     hasRandomizedMAC(device.mac);
   const isWan = device.wanSide || device.interface === 'WAN';
   const isOnline = device.status === 'bound' || device.status === 'dynamic';
-  const name =
-    device.comment || device.hostname || (isWan ? 'Gateway' : device.deviceModel || device.vendor) || device.ip;
-  const kind = [device.deviceModel && device.deviceModel !== name ? device.deviceModel : device.deviceType, device.vendor]
-    .filter((v, i, a) => v && a.indexOf(v) === i && v !== name)
-    .join(' · ');
+  const name = displayName(device);
+  const kind = identityLine(device);
   const Glyph = glyphFor(device);
   const down = formatRate(device.rateIn);
   const up = formatRate(device.rateOut);
@@ -188,7 +159,7 @@ export function DeviceCard({
           <DropdownMenuContent align="end" className="w-56">
             {onRename && (
               <DropdownMenuItem
-                onClick={() => onRename(device.mac, device.comment || device.hostname || device.deviceModel || device.vendor || '')}
+                onClick={() => onRename(device.mac, device.name || device.comment || '')}
               >
                 <Edit3 className="size-4" /> Rename
               </DropdownMenuItem>
@@ -284,6 +255,7 @@ export function DeviceCard({
       {/* State chips */}
       {(device.isBlocked || device.isExempt || hasPriority || device.hasBWLimit || (isOnline && isWifi && band)) && (
         <div className="mt-3 flex flex-wrap gap-1.5">
+          {device.isNew && <Chip tone="amber">New</Chip>}
           {device.isBlocked && <Chip tone="fault">Blocked</Chip>}
           {isOnline && isWifi && band && <Chip tone="air">{band}</Chip>}
           {hasPriority && (

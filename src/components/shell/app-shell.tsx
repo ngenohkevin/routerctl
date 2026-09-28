@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutGrid,
+  MonitorSmartphone,
   Gauge,
   Activity,
   Network,
@@ -31,6 +32,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: '/', label: 'Overview', icon: LayoutGrid },
+  { href: '/devices', label: 'Devices', icon: MonitorSmartphone },
   { href: '/speed-test', label: 'Speed test', icon: Gauge },
   { href: '/traffic', label: 'Traffic', icon: Activity },
   { href: '/dhcp', label: 'DHCP', icon: Network },

@@ -1,5 +1,6 @@
 import type {
   DevicesResponse,
+  DeviceProfilePatch,
   SystemResponse,
   BandwidthResponse,
   InterfacesResponse,
@@ -291,6 +292,28 @@ export const api = {
     return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/block`, {
       method: 'POST',
     });
+  },
+
+  async updateDeviceProfile(mac: string, patch: DeviceProfilePatch): Promise<unknown> {
+    return fetchApi(`/devices/${encodeURIComponent(mac)}/profile`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
+
+  /** Clear the "new device" flag on one device, or on all when mac is omitted. */
+  async acknowledgeDevices(mac?: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(mac ? `/devices/${encodeURIComponent(mac)}/ack` : '/devices-ack', {
+      method: 'POST',
+    });
+  },
+
+  async forgetDevice(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' });
+  },
+
+  async reserveLease(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/dhcp/leases/${encodeURIComponent(mac)}/static`, { method: 'POST' });
   },
 
   async unblockDevice(mac: string): Promise<{ message: string }> {

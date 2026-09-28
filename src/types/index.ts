@@ -43,6 +43,41 @@ export interface Device {
   priority: number;
   // Upstream equipment behind an uplink interface (ISP CPE) — hidden in the UI
   wanSide?: boolean;
+
+  // Identification detail
+  os?: string;            // from the DHCP vendor class ("Android 14")
+  identifiedBy?: IdentifiedBy;
+  randomMac?: boolean;    // private/randomized address: the MAC names no maker
+  reserved?: boolean;     // the IP is a static lease on the router
+  detectedType?: string;  // automatic type, when the owner overrode it
+  detectedModel?: string;
+
+  // From the agent's device registry
+  name?: string;          // the owner's name for it
+  owner?: string;
+  notes?: string;
+  firstSeen?: string;
+  isNew?: boolean;        // joined since the list was last reviewed
+  policy?: DevicePolicy;  // follows the device's MAC across IP changes
+  remembered?: boolean;   // known only from the registry (left the network)
+}
+
+export type IdentifiedBy = 'you' | 'hostname' | 'mdns' | 'dhcp' | 'vendor';
+
+export interface DevicePolicy {
+  mode?: 'exempt' | 'limit';
+  upload?: string;
+  download?: string;
+  priority?: number;
+  blocked?: boolean;
+}
+
+export interface DeviceProfilePatch {
+  name?: string;
+  type?: string;
+  model?: string;
+  owner?: string;
+  notes?: string;
 }
 
 export interface WANLink {

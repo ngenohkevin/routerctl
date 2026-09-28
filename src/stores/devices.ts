@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Device, SystemInfo, HealthStatus } from '@/types';
+import type { Device, DeviceProfilePatch, SystemInfo, HealthStatus } from '@/types';
 import { api } from '@/lib/api';
 
 // Read the JWT directly (mirrors api.ts's getToken) so SSE can include
@@ -30,6 +30,9 @@ interface DevicesState {
   removeExemption: (mac: string) => Promise<void>;
   disconnectDevice: (mac: string) => Promise<void>;
   setDeviceName: (mac: string, name: string) => Promise<void>;
+  updateProfile: (mac: string, patch: DeviceProfilePatch) => Promise<void>;
+  acknowledge: (mac?: string) => Promise<void>;
+  forgetDevice: (mac: string) => Promise<void>;
   setDevicePriority: (mac: string, priority: number) => Promise<void>;
   removeDevicePriority: (mac: string) => Promise<void>;
   wakeOnLan: (mac: string) => Promise<void>;
@@ -195,10 +198,10 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
     try {
       await api.setDeviceName(mac, name);
       // Optimistic patch for instant feedback, then refetch — the agent
-      // stores the name as the DHCP lease comment and may normalize it.
+      // keeps names in its device registry.
       set((state) => ({
         devices: state.devices.map((d) =>
-          d.mac === mac ? { ...d, comment: name } : d
+          d.mac === mac ? { ...d, name } : d
         ),
       }));
       await get().fetchDevices();
@@ -208,6 +211,36 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
       });
       throw error;
     }
+  },
+
+  updateProfile: async (mac: string, patch: DeviceProfilePatch) => {
+    await api.updateDeviceProfile(mac, patch);
+    set((state) => ({
+      devices: state.devices.map((d) =>
+        d.mac === mac
+          ? {
+              ...d,
+              ...(patch.name !== undefined && { name: patch.name }),
+              ...(patch.owner !== undefined && { owner: patch.owner }),
+              ...(patch.notes !== undefined && { notes: patch.notes }),
+              isNew: false,
+            }
+          : d
+      ),
+    }));
+    await get().fetchDevices();
+  },
+
+  acknowledge: async (mac?: string) => {
+    await api.acknowledgeDevices(mac);
+    set((state) => ({
+      devices: state.devices.map((d) => (!mac || d.mac === mac ? { ...d, isNew: false } : d)),
+    }));
+  },
+
+  forgetDevice: async (mac: string) => {
+    await api.forgetDevice(mac);
+    set((state) => ({ devices: state.devices.filter((d) => d.mac !== mac) }));
   },
 
   setDevicePriority: async (mac: string, priority: number) => {
