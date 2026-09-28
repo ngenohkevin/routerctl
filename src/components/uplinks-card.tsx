@@ -18,7 +18,34 @@ import {
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { timeAgo } from '@/components/device-detail-dialog';
-import type { WANLink, CDNSteering, CDNGroupStatus, CFHealth } from '@/types';
+import type { WANLink, CDNSteering, CDNGroupStatus, CFHealth, LineState, WANFailoverStatus } from '@/types';
+
+// Line quality from the agent's failover loop. A line can answer every probe
+// and still be unusable (2026-09-28: Faiba at ~2s handshakes, 50% loss at its
+// first hop — shown as a healthy "Primary" while video buffered everywhere).
+const LINE_TONE: Record<LineState, string> = {
+  up: 'text-muted-foreground',
+  degraded: 'text-amber-500',
+  severe: 'text-red-500',
+  down: 'text-red-500',
+};
+
+const LINE_LABEL: Record<LineState, string> = {
+  up: 'Healthy',
+  degraded: 'Degraded',
+  severe: 'Severely degraded',
+  down: 'No internet',
+};
+
+function qualityText(l: WANLink): string | null {
+  if (!l.state) return null;
+  if (l.state === 'down') return LINE_LABEL.down;
+  const parts = [];
+  if (l.medianMs) parts.push(`${Math.round(l.medianMs)} ms`);
+  parts.push(`${Math.round(l.lossPct ?? 0)}% loss`);
+  const detail = parts.join(' · ');
+  return l.state === 'up' ? detail : `${LINE_LABEL[l.state]} — ${detail}`;
+}
 
 const GROUP_TITLES: Record<string, string> = {
   cloudflare: 'Cloudflare',
@@ -62,6 +89,8 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
   const [switching, setSwitching] = useState(false);
   const [cdn, setCdn] = useState<CDNSteering | null>(null);
   const [cdnSwitching, setCdnSwitching] = useState(false);
+  const [failover, setFailover] = useState<WANFailoverStatus | null>(null);
+  const [failoverSwitching, setFailoverSwitching] = useState(false);
 
   const fetchLinks = useCallback(async () => {
     try {
@@ -73,7 +102,26 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
       setLoaded(true);
     }
     api.getCdnSteering().then(setCdn).catch(() => null);
+    // Older agents have no failover endpoint — the section just stays hidden.
+    api.getWanFailover().then(setFailover).catch(() => null);
   }, []);
+
+  const handleFailoverMode = async (mode: 'auto' | 'manual') => {
+    if (!failover || failover.mode === mode) return;
+    setFailoverSwitching(true);
+    try {
+      setFailover(await api.setWanFailover({ mode }));
+      toast.success(
+        mode === 'auto'
+          ? 'Primary line is automatic — a severely degraded line is escaped'
+          : 'Primary line pinned — automatic failover paused'
+      );
+    } catch {
+      toast.error('Failed to change failover mode');
+    } finally {
+      setFailoverSwitching(false);
+    }
+  };
 
   useEffect(() => {
     fetchLinks();
@@ -139,18 +187,29 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
           const down = l.status !== 'bound';
           const noInternet = !down && !l.alive;
           const dead = down || noInternet;
+          const severe = !dead && l.state === 'severe';
+          const degraded = !dead && l.state === 'degraded';
+          const quality = dead ? null : qualityText(l);
           return (
-            <div key={l.interface} className="rounded-lg border border-border/60 p-3 space-y-1.5">
+            <div
+              key={l.interface}
+              className={
+                'rounded-lg border p-3 space-y-1.5 ' +
+                (severe ? 'border-red-500/50' : degraded ? 'border-amber-500/40' : 'border-border/60')
+              }
+            >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <span
                     className={
                       'h-2 w-2 rounded-full shrink-0 ' +
-                      (down || noInternet
+                      (down || noInternet || severe
                         ? 'bg-red-500'
-                        : l.primary
-                          ? 'bg-green-500 animate-pulse'
-                          : 'bg-blue-500')
+                        : degraded
+                          ? 'bg-amber-500'
+                          : l.primary
+                            ? 'bg-green-500 animate-pulse'
+                            : 'bg-blue-500')
                     }
                   />
                   <span className="text-sm font-medium truncate">
@@ -159,13 +218,23 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                   <span className="text-xs text-muted-foreground">{l.interface}</span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {l.alive && l.pingMs ? (
+                  {l.alive && l.pingMs && !l.state ? (
                     <span className="text-[10px] text-muted-foreground tabular-nums">
                       {l.pingMs} ms
                     </span>
                   ) : null}
                   {l.primary ? (
-                    <Badge variant="outline" className="text-xs text-green-500 border-green-500 gap-1">
+                    <Badge
+                      variant="outline"
+                      className={
+                        'text-xs gap-1 ' +
+                        (severe
+                          ? 'text-red-500 border-red-500'
+                          : degraded
+                            ? 'text-amber-500 border-amber-500'
+                            : 'text-green-500 border-green-500')
+                      }
+                    >
                       <Crown className="h-3 w-3" />
                       Primary
                     </Badge>
@@ -184,6 +253,12 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                   )}
                 </div>
               </div>
+              {quality && l.state && (
+                <div className={'text-xs tabular-nums ' + LINE_TONE[l.state]}>
+                  {l.state !== 'up' && <span className="font-medium">{quality}</span>}
+                  {l.state === 'up' && <span>live: {quality}</span>}
+                </div>
+              )}
               {(l.lastDownload ?? 0) > 0 ? (
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 tabular-nums">
                   <span className="text-base font-semibold text-green-500 whitespace-nowrap">
@@ -242,6 +317,51 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
             </div>
           );
         })}
+        {failover && links.length > 1 && (
+          <div className="rounded-lg border border-border/60 p-3 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">Primary line</span>
+              <div className="flex gap-1">
+                {(['auto', 'manual'] as const).map((m) => {
+                  const on = failover.mode === m;
+                  return (
+                    <Button
+                      key={m}
+                      size="sm"
+                      variant={on ? 'secondary' : 'ghost'}
+                      className={'h-6 gap-1.5 px-2 text-[11px] ' + (on ? '' : 'text-muted-foreground')}
+                      disabled={disabled || failoverSwitching || on}
+                      onClick={() => handleFailoverMode(m)}
+                    >
+                      {m === 'auto' ? (
+                        <span
+                          className={
+                            'h-1.5 w-1.5 rounded-full ' +
+                            (on ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40')
+                          }
+                        />
+                      ) : (
+                        <Pin className="h-3 w-3" />
+                      )}
+                      {m === 'auto' ? 'Auto' : 'Pinned'}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {failover.mode === 'auto'
+                ? `Prefers ${links.find((l) => l.interface === failover.preferred)?.label || failover.preferred}. Moves off a severely degraded line in ~1.5 min, back after ~10 min healthy.`
+                : 'Pinned by hand — automatic failover is paused. The router still fails over if the line drops entirely.'}
+            </p>
+            {failover.lastReason && (
+              <p className="text-[10px] text-muted-foreground">
+                <span className="font-medium text-foreground/80">Last switch</span>
+                {failover.lastSwitch && timeAgo(failover.lastSwitch) ? ` ${timeAgo(failover.lastSwitch)}` : ''}: {failover.lastReason}
+              </p>
+            )}
+          </div>
+        )}
         {cdn && cdn.groups.some((g) => g.routes > 0) && links.length > 1 && (
           <div className="rounded-lg border border-border/60 p-3 space-y-3">
             <div className="flex items-baseline justify-between gap-2">
@@ -333,7 +453,7 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
           </div>
         )}
         <p className="text-[10px] text-muted-foreground">
-          Failover is automatic (~20–30s) if the primary stops passing traffic.
+          The router fails over in ~20–30s if the primary stops passing traffic entirely.
         </p>
       </CardContent>
 
@@ -346,7 +466,8 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
             <AlertDialogDescription>
               All internet traffic will switch to this line within a few seconds. The other
               uplink stays connected as the automatic backup. Active downloads and calls may
-              briefly stall during the switch.
+              briefly stall during the switch. Choosing a line by hand pins it and pauses
+              automatic failover — switch the Primary line back to Auto to resume it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

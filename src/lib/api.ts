@@ -24,6 +24,7 @@ import type {
   StreamingCDN,
   WANLink,
   CDNSteering,
+  WANFailoverStatus,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -483,6 +484,17 @@ export const api = {
     return fetchApi<{ message: string }>('/wan/primary', {
       method: 'POST',
       body: JSON.stringify({ interface: iface }),
+    });
+  },
+
+  async getWanFailover(): Promise<WANFailoverStatus> {
+    return fetchApi<WANFailoverStatus>('/wan/failover');
+  },
+
+  async setWanFailover(req: { mode?: 'auto' | 'manual'; preferred?: string }): Promise<WANFailoverStatus> {
+    return fetchApi<WANFailoverStatus>('/wan/failover', {
+      method: 'POST',
+      body: JSON.stringify(req),
     });
   },
 

@@ -61,6 +61,36 @@ export interface WANLink {
   lastUpload?: number;   // Mbps
   lastPing?: number;     // ms
   lastTestAt?: string;   // RFC3339
+  // Quality from the agent's failover loop (verified TLS handshakes through
+  // this line). `alive` alone calls a line that answers in 2s with half its
+  // packets lost "up"; `state` can say "severe". Older agents omit these.
+  state?: LineState;
+  lossPct?: number;
+  medianMs?: number;
+}
+
+export type LineState = 'up' | 'degraded' | 'severe' | 'down';
+
+export interface LineQuality {
+  interface: string;
+  label?: string;
+  primary: boolean;
+  sent: number;
+  ok: number;
+  lossPct: number;
+  medianMs?: number;
+  state: LineState;
+}
+
+// Primary-line automatic failover. In auto, the agent moves the house off a
+// SEVERELY degraded primary and back to `preferred` once it has been clean.
+export interface WANFailoverStatus {
+  mode: 'auto' | 'manual';
+  preferred: string; // interface, e.g. "WAN"
+  lines: LineQuality[];
+  measuredAt?: string;
+  lastSwitch?: string;
+  lastReason?: string;
 }
 
 // Per-group CDN steering state (cloudflare / google), independently steered
