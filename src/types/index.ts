@@ -170,6 +170,15 @@ export interface WANFailoverStatus {
   lastReason?: string;
   /** Another line is winning; it takes over once it has won for `required` s. */
   pending?: { interface: string; reason: string; seconds: number; required: number };
+  /** Destinations routed by reachability (e.g. Telegram). */
+  reach?: {
+    group: string;
+    label: string;
+    reachable: Record<string, number>; // interface -> % of handshakes that completed
+    via?: string;
+    reason?: string;
+    checkedAt?: string;
+  }[];
 }
 
 // Per-group CDN steering state (cloudflare / google), independently steered

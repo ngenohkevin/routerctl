@@ -337,6 +337,28 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
             </table>
           )}
 
+          {failover.reach && failover.reach.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs text-ink-3">
+              {failover.reach.map((g) => {
+                const lineLabel = (i?: string) => links.find((l) => l.interface === i)?.label || i;
+                const primary = failover.lines.find((l) => l.primary)?.interface;
+                const detour = g.via && primary && g.via !== primary;
+                return (
+                  <li key={g.group} className={cn(detour && 'text-ink-2')}>
+                    <span className="font-medium text-ink-2">{g.label}</span> goes via {lineLabel(g.via)}
+                    {' · '}
+                    <span className="num font-mono">
+                      {Object.entries(g.reachable)
+                        .map(([i, pct]) => `${lineLabel(i)} ${pct}%`)
+                        .join(' · ')}
+                    </span>
+                    {detour && <span> — the line in use doesn&apos;t reach it reliably</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
           {failover.mode === 'auto' && failover.pending && (
             <p className="mt-2 rounded-md border border-air/30 px-2.5 py-2 text-xs text-ink-2">
               <span className="font-medium text-air">
