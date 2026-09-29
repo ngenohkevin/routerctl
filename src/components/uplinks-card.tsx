@@ -127,8 +127,8 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
       await api.setWanFailover({ mode });
       toast.success(
         mode === 'auto'
-          ? 'Primary line is automatic — a severely degraded line is escaped'
-          : 'Primary line pinned — automatic failover paused'
+          ? 'Automatic — the house uses whichever line measures better'
+          : 'Pinned — the house stays on the current line'
       );
       refresh();
     } catch {
@@ -172,7 +172,6 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
   };
 
   if (loaded && links.length === 0) return null;
-  const preferredLabel = failover ? links.find((l) => l.interface === failover.preferred)?.label || failover.preferred : '';
 
   return (
     <Panel>
@@ -301,9 +300,51 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
           </div>
           <p className="mt-1.5 text-xs text-ink-3">
             {failover.mode === 'auto'
-              ? `Prefers ${preferredLabel}. Leaves a severely degraded line in ~1.5 min; returns after ~10 min healthy.`
-              : 'Pinned by hand — automatic failover is paused. The router still fails over if the line drops entirely.'}
+              ? 'Uses whichever line measures better. Switches when the other is clearly faster or more reliable for 5 minutes, and at once if a line fails.'
+              : 'Pinned by hand — automatic selection is paused. The router still fails over if the line drops entirely.'}
           </p>
+
+          {failover.lines.length > 1 && (
+            <table className="mt-3 w-full text-xs">
+              <thead>
+                <tr className="text-left">
+                  <th className="eyebrow pb-1.5 font-medium">Last 5 min</th>
+                  <th className="eyebrow pb-1.5 text-right font-medium">Response</th>
+                  <th className="eyebrow pb-1.5 text-right font-medium">Loss</th>
+                  <th className="eyebrow pb-1.5 text-right font-medium">Speed</th>
+                </tr>
+              </thead>
+              <tbody className="num font-mono">
+                {failover.lines.map((l) => (
+                  <tr key={l.interface} className="border-t border-hairline-soft">
+                    <td className="py-1.5 font-sans">
+                      <span className={cn('font-medium', l.primary ? 'text-ink' : 'text-ink-2')}>{l.label || l.interface}</span>
+                      {l.primary && <span className="ml-1.5 text-ink-4">in use</span>}
+                    </td>
+                    <td className={cn('py-1.5 text-right', (l.windowMs ?? 0) >= 250 ? 'text-amber' : 'text-ink-2')}>
+                      {l.windowMs ? `${Math.round(l.windowMs)} ms` : '—'}
+                    </td>
+                    <td className={cn('py-1.5 text-right', l.windowLossPct >= 10 ? 'text-fault' : l.windowLossPct >= 5 ? 'text-amber' : 'text-ink-3')}>
+                      {`${Math.round(l.windowLossPct)}%`}
+                    </td>
+                    <td className="py-1.5 text-right text-ink-2" title={l.capacityAt ? `${l.capacitySource ?? 'measured'} ${timeAgo(l.capacityAt) ?? ''}` : undefined}>
+                      {l.capacityMbps ? `${Math.round(l.capacityMbps)} Mbps` : '—'}
+                      {l.capacityAt && <span className="ml-1 font-sans text-ink-4">{timeAgo(l.capacityAt)}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {failover.mode === 'auto' && failover.pending && (
+            <p className="mt-2 rounded-md border border-air/30 px-2.5 py-2 text-xs text-ink-2">
+              <span className="font-medium text-air">
+                Switching to {links.find((l) => l.interface === failover.pending!.interface)?.label || failover.pending.interface}
+              </span>{' '}
+              in ~{Math.max(1, Math.ceil((failover.pending.required - failover.pending.seconds) / 60))} min if it stays ahead: {failover.pending.reason}.
+            </p>
+          )}
           {failover.lastReason && (
             <p className="mt-1.5 text-xs text-ink-3">
               <span className="font-medium text-ink-2">

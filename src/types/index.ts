@@ -150,15 +150,26 @@ export interface LineQuality {
   state: LineState;
 }
 
-// Primary-line automatic failover. In auto, the agent moves the house off a
-// SEVERELY degraded primary and back to `preferred` once it has been clean.
+// One line as the selector sees it: this cycle, plus the 5-minute window
+// and the latest capacity reading.
+export interface LineStatus extends LineQuality {
+  windowMs?: number;
+  windowLossPct: number;
+  capacityMbps?: number;
+  capacityAt?: string;
+  capacitySource?: 'probe' | 'speed test' | 'streaming test';
+}
+
+// Primary-line selection. In auto, the agent puts the house on whichever line
+// measures better (no preferred line); manual pins the current one.
 export interface WANFailoverStatus {
   mode: 'auto' | 'manual';
-  preferred: string; // interface, e.g. "WAN"
-  lines: LineQuality[];
+  lines: LineStatus[];
   measuredAt?: string;
   lastSwitch?: string;
   lastReason?: string;
+  /** Another line is winning; it takes over once it has won for `required` s. */
+  pending?: { interface: string; reason: string; seconds: number; required: number };
 }
 
 // Per-group CDN steering state (cloudflare / google), independently steered

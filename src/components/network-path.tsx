@@ -30,13 +30,13 @@ export function verdictFor(links: WANLink[], failover: WANFailoverStatus | null,
     .filter(Boolean)
     .join(' · ');
 
-  const preferred = failover ? links.find((l) => l.interface === failover.preferred) : undefined;
-  const onBackup = failover && preferred && preferred.interface !== primary.interface;
-  const backupNote = onBackup
-    ? ` — on backup; ${name(preferred)} is ${preferred.state === 'up' ? 'recovering' : preferred.state ?? 'unavailable'}${
-        failover.mode === 'auto' ? ', will switch back automatically' : ''
-      }`
-    : '';
+  // A line that is winning but hasn't yet won long enough to take over.
+  const pending = failover?.mode === 'auto' ? failover.pending : undefined;
+  const pendingLine = pending ? links.find((l) => l.interface === pending.interface) : undefined;
+  const backupNote =
+    pending && pendingLine
+      ? ` — ${name(pendingLine)} is measuring better, switching in ~${Math.max(1, Math.ceil((pending.required - pending.seconds) / 60))} min`
+      : '';
 
   switch (primary.state) {
     case 'severe':
