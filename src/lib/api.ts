@@ -642,6 +642,10 @@ export const api = {
     return fetchApi<WANFailoverStatus>('/wan/failover');
   },
 
+  async setWanBalance(enabled: boolean): Promise<unknown> {
+    return fetchApi('/wan/balance', { method: 'POST', body: JSON.stringify({ enabled }) });
+  },
+
   async setWanFailover(req: { mode: 'auto' | 'manual' }): Promise<WANFailoverStatus> {
     return fetchApi<WANFailoverStatus>('/wan/failover', {
       method: 'POST',

@@ -337,6 +337,45 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
             </table>
           )}
 
+          {failover.balance && (
+            <div className="mt-4 border-t border-hairline-soft pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-ink">Use both lines</span>
+                <Segmented
+                  value={failover.balance.enabled ? 'on' : 'off'}
+                  disabled={disabled || failoverSwitching}
+                  onChange={async (v) => {
+                    setFailoverSwitching(true);
+                    try {
+                      await api.setWanBalance(v === 'on');
+                      toast.success(v === 'on' ? 'Balancing across both lines' : 'Balancing off — one line at a time');
+                      refresh();
+                    } catch {
+                      toast.error('Failed to change balancing');
+                    } finally {
+                      setFailoverSwitching(false);
+                    }
+                  }}
+                  options={[
+                    { value: 'on', label: 'On' },
+                    { value: 'off', label: 'Off' },
+                  ]}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-ink-3">
+                {failover.balance.enabled && failover.balance.shares
+                  ? `New connections: ${Object.entries(failover.balance.shares)
+                      .sort()
+                      .map(([i, n]) => `${n} in ${failover.balance!.buckets} via ${links.find((l) => l.interface === i)?.label || i}`)
+                      .join(', ')}, by measured speed. Calls, Tailscale and steered services stay on their line; an open connection never moves.`
+                  : failover.balance.enabled
+                    ? 'Starting…'
+                    : 'Off — the whole house uses the line in use.'}
+              </p>
+              {failover.balance.error && <p className="mt-1 text-xs text-fault">{failover.balance.error}</p>}
+            </div>
+          )}
+
           {failover.reach && failover.reach.length > 0 && (
             <ul className="mt-3 space-y-1 text-xs text-ink-3">
               {failover.reach.map((g) => {

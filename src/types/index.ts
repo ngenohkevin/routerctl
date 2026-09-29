@@ -170,6 +170,14 @@ export interface WANFailoverStatus {
   lastReason?: string;
   /** Another line is winning; it takes over once it has won for `required` s. */
   pending?: { interface: string; reason: string; seconds: number; required: number };
+  /** Per-connection load balancing: new TCP connections split across lines. */
+  balance?: {
+    enabled: boolean;
+    shares?: Record<string, number>; // interface -> buckets
+    buckets: number;
+    reason?: string;
+    error?: string;
+  };
   /** Destinations routed by reachability (e.g. Telegram). */
   reach?: {
     group: string;
