@@ -304,6 +304,14 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
               : 'Pinned by hand — automatic selection is paused. The router still fails over if the line drops entirely.'}
           </p>
 
+          {failover.probeSourcesMissing && failover.probeSourcesMissing.length > 0 && (
+            <p className="mt-2 rounded-md border border-amber/35 px-2.5 py-2 text-xs text-amber">
+              Per-line measurements paused: the Pi is missing its probe address
+              {failover.probeSourcesMissing.length > 1 ? 'es' : ''} {failover.probeSourcesMissing.join(', ')}. Speed and
+              reachability figures below may be stale. On the Pi: <span className="font-mono">sudo systemctl restart routerctl-probe-addrs</span>
+            </p>
+          )}
+
           {failover.lines.length > 1 && (
             <table className="mt-3 w-full text-xs">
               <thead>

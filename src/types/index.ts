@@ -170,6 +170,8 @@ export interface WANFailoverStatus {
   lastReason?: string;
   /** Another line is winning; it takes over once it has won for `required` s. */
   pending?: { interface: string; reason: string; seconds: number; required: number };
+  /** Per-line probe addresses missing from the Pi: measurements paused. */
+  probeSourcesMissing?: string[];
   /** Per-connection load balancing: new TCP connections split across lines. */
   balance?: {
     enabled: boolean;
