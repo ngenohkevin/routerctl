@@ -21,12 +21,14 @@ import { UplinksCard } from '@/components/uplinks-card';
 import { SystemStatus } from '@/components/system-status';
 import { WiFiCard } from '@/components/wifi-card';
 import { NetworkPath } from '@/components/network-path';
+import { PowerCard } from '@/components/power-card';
 import { AppShell } from '@/components/shell/app-shell';
 import { BandwidthDialog } from '@/components/bandwidth-dialog';
 import { RenameDialog } from '@/components/rename-dialog';
 import { PriorityDialog } from '@/components/priority-dialog';
 import { useDevicesStore } from '@/stores/devices';
 import { useNetwork } from '@/stores/network';
+import { useUps } from '@/stores/ups';
 import { toast } from 'sonner';
 import type { Device } from '@/types';
 
@@ -76,6 +78,7 @@ export default function Dashboard() {
   const [detailMac, setDetailMac] = useState<string | null>(null);
   const [filter, setFilter] = useState<DeviceFilter>('all');
   const network = useNetwork();
+  const ups = useUps();
 
   useEffect(() => {
     // Initial fetch
@@ -329,6 +332,7 @@ export default function Dashboard() {
           wiredCount={stats.ethernet}
           systemInfo={systemInfo}
           loaded={network.loaded}
+          ups={ups.failed ? null : ups.status}
         />
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:gap-8">
@@ -425,6 +429,7 @@ export default function Dashboard() {
           {/* Network side column */}
           <aside className="min-w-0 space-y-4" aria-label="Network">
             <UplinksCard />
+            <PowerCard />
             <WiFiCard radios={network.wifi?.radios ?? []} events={network.wifi?.events ?? []} devices={devices} />
             <SystemStatus systemInfo={systemInfo} />
           </aside>

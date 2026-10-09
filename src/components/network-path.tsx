@@ -3,7 +3,8 @@
 import { Cable, Globe, Wifi } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Led, toneFor, type LedTone } from '@/components/shell/led';
-import type { WANLink, WANFailoverStatus, WiFiRadio, SystemInfo } from '@/types';
+import { batteryNote } from '@/lib/power';
+import type { WANLink, WANFailoverStatus, WiFiRadio, SystemInfo, UPSStatus } from '@/types';
 
 interface Verdict {
   headline: string;
@@ -11,8 +12,26 @@ interface Verdict {
   tone: LedTone;
 }
 
-/** One sentence about the internet, then why. The overview's focal point. */
-export function verdictFor(links: WANLink[], failover: WANFailoverStatus | null, loaded: boolean): Verdict {
+/**
+ * The overview's focal point: one sentence about the internet, then why.
+ * While the house runs on the UPS that leads the detail, and the tone is at
+ * least amber — the internet may be fine, but it is on borrowed time.
+ */
+export function verdictFor(
+  links: WANLink[],
+  failover: WANFailoverStatus | null,
+  loaded: boolean,
+  ups: UPSStatus | null = null
+): Verdict {
+  const v = lineVerdict(links, failover, loaded);
+  const note = batteryNote(ups);
+  if (!note) return v;
+  const tone: LedTone = ups?.state === 'low_battery' || v.tone === 'fault' ? 'fault' : 'amber';
+  return { ...v, detail: v.detail ? `${note} ${v.detail}` : note, tone };
+}
+
+/** One sentence about the internet, then why. */
+function lineVerdict(links: WANLink[], failover: WANFailoverStatus | null, loaded: boolean): Verdict {
   if (!loaded) return { headline: 'Checking the lines…', detail: '', tone: 'off' };
   if (links.length === 0) return { headline: 'No uplink data', detail: 'The agent is not reporting any internet lines.', tone: 'off' };
 
@@ -202,6 +221,7 @@ export function NetworkPath({
   wiredCount,
   systemInfo,
   loaded,
+  ups,
 }: {
   links: WANLink[];
   failover: WANFailoverStatus | null;
@@ -209,8 +229,9 @@ export function NetworkPath({
   wiredCount: number;
   systemInfo: SystemInfo | null;
   loaded: boolean;
+  ups?: UPSStatus | null;
 }) {
-  const verdict = verdictFor(links, failover, loaded);
+  const verdict = verdictFor(links, failover, loaded, ups ?? null);
   const aps = accessPoints(radios, wiredCount);
   const primaryTone = links.find((l) => l.primary) ? lineTone(links.find((l) => l.primary)!) : 'off';
 
