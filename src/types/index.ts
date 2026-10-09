@@ -527,3 +527,57 @@ export interface LatencyResult {
   timestamp: string;
   targets: LatencyTarget[];
 }
+
+// UPS (NUT on the Pi) — /api/ups*
+export type UPSState = 'online' | 'on_battery' | 'low_battery' | 'unavailable';
+
+export interface UPSOutage {
+  start: string;
+  end: string | null; // null while the cut is going on
+  durationSec: number;
+  lowestBatteryV: number;
+  peakLoad: number;
+  ranOut: boolean; // the battery emptied before mains came back
+  ranOutAt: string | null;
+  lastOnBattery?: string;
+}
+
+export interface UPSEvent {
+  at: string;
+  kind: 'beeper' | 'self_test';
+  detail: 'muted' | 'unmuted' | 'started' | 'stopped' | 'finished';
+  ok: boolean;
+  note?: string;
+}
+
+export interface UPSStatus {
+  available: boolean;
+  reason?: string;
+  state: UPSState;
+  testing: boolean;
+  alerts: string[] | null; // 'replace_battery' | 'overload' | 'low_battery'
+  flags: string[] | null;
+  mains: { voltage: number; frequency: number };
+  outputVoltage: number;
+  battery: { voltage: number; charge: number; chargeEstimated: boolean };
+  load: number;
+  beeper: 'enabled' | 'disabled' | '';
+  onBatterySince: string | null;
+  lastOutage: UPSOutage | null;
+  controls: { configured: boolean };
+  updatedAt: string | null;
+}
+
+export interface UPSPoint {
+  t: string;
+  mains: number;
+  battery: number;
+  onBattery: boolean;
+}
+
+export interface UPSHistory {
+  series: UPSPoint[] | null;
+  outages: UPSOutage[] | null;
+  events: UPSEvent[] | null;
+  since: string | null;
+}

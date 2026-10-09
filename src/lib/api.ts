@@ -28,6 +28,8 @@ import type {
   CDNSteering,
   WANFailoverStatus,
   WiFiStatus,
+  UPSStatus,
+  UPSHistory,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -636,6 +638,23 @@ export const api = {
 
   async getWiFi(): Promise<WiFiStatus> {
     return fetchApi<WiFiStatus>('/wifi');
+  },
+
+  // UPS (NUT on the Pi)
+  async getUps(): Promise<UPSStatus> {
+    return fetchApi<UPSStatus>('/ups');
+  },
+
+  async getUpsHistory(): Promise<UPSHistory> {
+    return fetchApi<UPSHistory>('/ups/history');
+  },
+
+  async setUpsBeeper(enabled: boolean): Promise<UPSStatus> {
+    return fetchApi<UPSStatus>('/ups/beeper', { method: 'POST', body: JSON.stringify({ enabled }) });
+  },
+
+  async upsTest(action: 'start' | 'stop'): Promise<UPSStatus> {
+    return fetchApi<UPSStatus>('/ups/test', { method: 'POST', body: JSON.stringify({ action }) });
   },
 
   async getWanFailover(): Promise<WANFailoverStatus> {
