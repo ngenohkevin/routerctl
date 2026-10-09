@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  BatteryCharging,
   LayoutGrid,
   MonitorSmartphone,
   Gauge,
@@ -35,6 +36,7 @@ const NAV: NavItem[] = [
   { href: '/devices', label: 'Devices', icon: MonitorSmartphone },
   { href: '/speed-test', label: 'Speed test', icon: Gauge },
   { href: '/traffic', label: 'Traffic', icon: Activity },
+  { href: '/power', label: 'Power', icon: BatteryCharging },
   { href: '/dhcp', label: 'DHCP', icon: Network },
   { href: '/logs', label: 'Logs', icon: ScrollText },
   { href: '/settings', label: 'Settings', icon: Settings },
