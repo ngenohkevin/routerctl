@@ -16,6 +16,15 @@ const EVENT_TEXT: Record<string, string> = {
   'self_test:finished': 'Self-test finished',
 };
 
+// A failed action must not read as if it happened.
+const FAILED_TEXT: Record<string, string> = {
+  'beeper:muted': 'Couldn’t mute the beeper',
+  'beeper:unmuted': 'Couldn’t turn the beeper back on',
+  'self_test:started': 'Self-test didn’t start',
+  'self_test:stopped': 'Couldn’t stop the self-test',
+  'self_test:finished': 'Self-test',
+};
+
 type Row = { at: number; outage?: UPSOutage; event?: UPSEvent };
 
 /** Power cuts, newest first, with dashboard actions as quieter rows. */
@@ -100,7 +109,8 @@ function OutageRow({ o }: { o: UPSOutage }) {
 }
 
 function EventRow({ e }: { e: UPSEvent }) {
-  const text = EVENT_TEXT[`${e.kind}:${e.detail}`] ?? `${e.kind} ${e.detail}`;
+  const key = `${e.kind}:${e.detail}`;
+  const text = (e.ok ? EVENT_TEXT[key] : FAILED_TEXT[key]) ?? `${e.kind} ${e.detail}`;
   return (
     <li className="flex items-start justify-between gap-3 px-4 py-2 md:px-5">
       <span className={cn('text-xs', e.ok ? 'text-ink-3' : 'text-fault')}>

@@ -74,7 +74,7 @@ export function PowerChart({ series, loading }: { series: UPSPoint[]; loading: b
         aside={runs.length ? <span>{runs.length === 1 ? '1 cut shaded' : `${runs.length} cuts shaded`}</span> : undefined}
       />
       <ChartContainer config={config} className="h-[240px] w-full">
-        <LineChart data={rows} margin={{ top: 8, right: 0, left: -12, bottom: 0 }}>
+        <LineChart data={rows} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
           <CartesianGrid vertical={false} stroke="var(--hairline-soft)" />
           <XAxis
             dataKey="t"
@@ -87,7 +87,7 @@ export function PowerChart({ series, loading }: { series: UPSPoint[]; loading: b
             axisLine={false}
             minTickGap={32}
           />
-          <YAxis yAxisId="mains" domain={[0, 260]} fontSize={11} tickLine={false} axisLine={false} width={44} unit=" V" />
+          <YAxis yAxisId="mains" domain={[0, 260]} fontSize={11} tickLine={false} axisLine={false} width={52} unit=" V" />
           <YAxis
             yAxisId="battery"
             orientation="right"
