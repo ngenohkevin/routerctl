@@ -11,7 +11,7 @@ import type { UPSEvent, UPSOutage } from '@/types';
 const EVENT_TEXT: Record<string, string> = {
   'beeper:muted': 'Beeper muted from the dashboard',
   'beeper:unmuted': 'Beeper turned back on from the dashboard',
-  'self_test:started': 'Self-test started',
+  'self_test:started': 'Self-test requested',
   'self_test:stopped': 'Self-test stopped',
   'self_test:finished': 'Self-test finished',
 };

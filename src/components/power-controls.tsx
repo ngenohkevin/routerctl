@@ -89,7 +89,7 @@ export function PowerControls({ onChanged }: { onChanged: () => void }) {
               size="sm"
               className="h-8"
               disabled={!!blocked || !!testBlocked || busy !== null}
-              onClick={() => run('test', () => api.upsTest('start'), 'Self-test started')}
+              onClick={() => run('test', () => api.upsTest('start'), 'Self-test requested')}
             >
               Run quick self-test
             </Button>

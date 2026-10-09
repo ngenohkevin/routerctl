@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Panel, PanelHeader } from '@/components/shell/panel';
-import { clock } from '@/lib/power';
+import { chartRows, clock, type ChartRow } from '@/lib/power';
 import type { UPSPoint } from '@/types';
 
 const config = {
@@ -20,10 +20,8 @@ const config = {
   battery: { label: 'Battery', color: 'var(--chart-4)' },
 } satisfies ChartConfig;
 
-type Row = { t: number; mains: number; battery: number; onBattery: boolean };
-
 /** Contiguous on-battery minutes as [from, to] in ms, for shading. */
-function batteryRuns(rows: Row[]): [number, number][] {
+function batteryRuns(rows: ChartRow[]): [number, number][] {
   const runs: [number, number][] = [];
   let start: number | null = null;
   for (const r of rows) {
@@ -48,12 +46,8 @@ export function PowerChart({ series, loading }: { series: UPSPoint[]; loading: b
       </Panel>
     );
   }
-  const rows: Row[] = series.map((p) => ({
-    t: new Date(p.t).getTime(),
-    mains: Math.round(p.mains),
-    battery: p.battery,
-    onBattery: p.onBattery,
-  }));
+  // Gaps (agent, NUT or the Pi down) break the lines instead of being drawn across.
+  const rows = chartRows(series);
   if (rows.length < 2) {
     return (
       <Panel>
@@ -110,7 +104,8 @@ export function PowerChart({ series, loading }: { series: UPSPoint[]; loading: b
                 }}
                 formatter={(value, name) => (
                   <span className="num font-mono">
-                    {config[name as keyof typeof config]?.label ?? name} {Number(value).toFixed(name === 'battery' ? 1 : 0)} V
+                    {config[name as keyof typeof config]?.label ?? name}{' '}
+                    {value == null ? '—' : `${Number(value).toFixed(name === 'battery' ? 1 : 0)} V`}
                   </span>
                 )}
               />

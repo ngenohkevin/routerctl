@@ -1,5 +1,5 @@
 import type { LedTone } from '@/components/shell/led';
-import type { UPSStatus } from '@/types';
+import type { UPSEvent, UPSPoint, UPSStatus } from '@/types';
 
 /** "40s", "12 min", "1 h 07 m", "26 h 03 m". */
 export function formatDuration(sec: number): string {
@@ -73,4 +73,35 @@ export function batteryNote(s: UPSStatus | null, now: number = Date.now()): stri
     return `On UPS battery${dur}, battery ${s.battery.voltage.toFixed(1)} V.`;
   }
   return null;
+}
+
+/** One chart row. Null breaks the line: no data (agent, NUT or the Pi was down). */
+export interface ChartRow {
+  t: number;
+  mains: number | null;
+  battery: number | null;
+  onBattery: boolean;
+}
+
+/** Minute points to chart rows, with a break wherever more than 2 minutes are missing. */
+export function chartRows(series: UPSPoint[]): ChartRow[] {
+  const rows: ChartRow[] = [];
+  for (const p of series) {
+    const t = new Date(p.t).getTime();
+    const prev = rows[rows.length - 1];
+    if (prev && t - prev.t > 2 * 60_000) {
+      rows.push({ t: prev.t + 60_000, mains: null, battery: null, onBattery: false });
+    }
+    rows.push({ t, mains: Math.round(p.mains), battery: p.battery, onBattery: p.onBattery });
+  }
+  return rows;
+}
+
+/** The newest finished self-test at or after `after` (ms), if any. Events are newest first. */
+export function testResultAfter(events: UPSEvent[] | null, after: number): UPSEvent | null {
+  return (
+    (events ?? []).find(
+      (e) => e.kind === 'self_test' && e.detail === 'finished' && new Date(e.at).getTime() >= after
+    ) ?? null
+  );
 }

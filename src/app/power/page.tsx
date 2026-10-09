@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/shell/app-shell';
 import { PageHeader } from '@/components/shell/page-header';
@@ -11,8 +12,8 @@ import { PowerControls } from '@/components/power-controls';
 import { PowerChart } from '@/components/power-chart';
 import { OutageList } from '@/components/outage-list';
 import { api, isAuthenticated } from '@/lib/api';
-import { useUps } from '@/stores/ups';
-import { alertText, powerHeadline, powerPanelTone, powerTone } from '@/lib/power';
+import { useUps, useUpsStore } from '@/stores/ups';
+import { alertText, powerHeadline, powerPanelTone, powerTone, testResultAfter } from '@/lib/power';
 import type { UPSHistory } from '@/types';
 
 export default function PowerPage() {
@@ -47,6 +48,29 @@ export default function PowerPage() {
       clearInterval(t);
     };
   }, [reload]);
+
+  // When a self-test ends, show its outcome now: the UPS gives no reply to the
+  // command, so "requested" is all the button could say.
+  useEffect(() => {
+    let testingSince: number | null = useUpsStore.getState().status?.testing ? Date.now() : null;
+    return useUpsStore.subscribe((st) => {
+      const testing = !!st.status?.testing;
+      if (testing && testingSince === null) testingSince = Date.now();
+      if (!testing && testingSince !== null) {
+        const after = testingSince - 120_000; // browser and Pi clocks may differ a little
+        testingSince = null;
+        api
+          .getUpsHistory()
+          .then((h) => {
+            setHistory(h);
+            const e = testResultAfter(h.events, after);
+            if (e?.ok) toast.success(`Self-test: ${e.note ?? 'done'}`);
+            else if (e) toast.error(`Self-test: ${e.note ?? 'no result'}`);
+          })
+          .catch(() => {});
+      }
+    });
+  }, []);
 
   const live = !!s && s.available && !failed;
   const headline = loaded ? powerHeadline(s, failed) : 'Checking the UPS…';
