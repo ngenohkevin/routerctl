@@ -363,7 +363,7 @@ export function StreamingTest({
               <PanelHeader
                 title="Where your video comes from"
                 icon={<Server />}
-                aside="connect · speed"
+                aside="speed · connect"
                 className="mb-0 px-4 pt-4 pb-3 md:px-5"
               />
               <ul className="divide-y divide-hairline-soft border-t border-hairline-soft">
