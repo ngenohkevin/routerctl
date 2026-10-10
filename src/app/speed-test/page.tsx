@@ -185,7 +185,10 @@ export default function SpeedTestPage() {
 
           <TabsContent value="speedtest" forceMount className="space-y-6 data-[state=inactive]:hidden">
             <div className="grid gap-6 lg:grid-cols-3">
-              <Panel className="flex flex-col items-center justify-center gap-5 lg:col-span-2">
+              {/* Its own height, not the lines card's: that card grew (primary-line
+                  table, balancing, steering) and a stretched panel left the gauge
+                  floating in empty space. */}
+              <Panel className="flex flex-col items-center gap-5 lg:col-span-2 lg:self-start">
                 {/* Which line, as the internet sees it */}
                 <div className="flex min-h-5 w-full items-center justify-between gap-3 text-xs text-ink-3">
                   <span className="flex min-w-0 items-center gap-2">
