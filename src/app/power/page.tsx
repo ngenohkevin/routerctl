@@ -13,7 +13,7 @@ import { PowerChart } from '@/components/power-chart';
 import { OutageList } from '@/components/outage-list';
 import { api, isAuthenticated } from '@/lib/api';
 import { useUps, useUpsStore } from '@/stores/ups';
-import { alertText, powerHeadline, powerPanelTone, powerTone, testResultAfter } from '@/lib/power';
+import { alertText, batteryHint, powerHeadline, powerPanelTone, powerTone, testResultAfter } from '@/lib/power';
 import type { UPSHistory } from '@/types';
 
 export default function PowerPage() {
@@ -109,7 +109,7 @@ export default function PowerPage() {
             <Stat
               label="Battery"
               value={`${s.battery.voltage.toFixed(1)} V`}
-              hint={`~${s.battery.charge}%${s.battery.chargeEstimated ? ' (estimated)' : ''}`}
+              hint={batteryHint(s)}
               tone={s.state === 'low_battery' ? 'fault' : 'ink'}
             />
             <Stat label="Load" value={`${s.load}%`} hint="of the UPS's capacity" />

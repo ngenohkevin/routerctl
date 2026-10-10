@@ -530,6 +530,7 @@ export interface LatencyResult {
 
 // UPS (NUT on the Pi) — /api/ups*
 export type UPSState = 'online' | 'on_battery' | 'low_battery' | 'unavailable';
+export type UPSBatteryState = 'discharging' | 'charging' | 'charged' | ''; // '' = not known yet
 
 export interface UPSOutage {
   start: string;
@@ -559,7 +560,7 @@ export interface UPSStatus {
   flags: string[] | null;
   mains: { voltage: number; frequency: number };
   outputVoltage: number;
-  battery: { voltage: number; charge: number; chargeEstimated: boolean };
+  battery: { voltage: number; charge: number; chargeEstimated: boolean; state?: UPSBatteryState }; // older agents omit state
   load: number;
   beeper: 'enabled' | 'disabled' | '';
   onBatterySince: string | null;

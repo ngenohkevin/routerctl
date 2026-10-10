@@ -30,7 +30,7 @@ export function PowerCard() {
         {live && s && (
           <>
             <p className="num mt-1.5 pl-4 font-mono text-xs text-ink-2">
-              Battery {s.battery.voltage.toFixed(1)} V · Load {s.load}% ·{' '}
+              Battery {s.battery.voltage.toFixed(1)} V{s.battery.state === 'charging' ? ' (charging)' : ''} · Load {s.load}% ·{' '}
               {s.state === 'online' ? `${Math.round(s.mains.voltage)} V` : 'mains off'}
             </p>
             {(s.alerts ?? []).map((a) => (

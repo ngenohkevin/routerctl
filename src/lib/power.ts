@@ -64,6 +64,21 @@ export function powerHeadline(s: UPSStatus | null, failed: boolean, now: number 
   return 'On mains';
 }
 
+/**
+ * The Battery figure's hint. On mains the UPS reports its charger's voltage,
+ * so NUT's percentage reads ~100% even while a flat battery is refilling: say
+ * charging or charged instead. On battery the percentage is a rough guess
+ * from voltage, labelled as such.
+ */
+export function batteryHint(s: UPSStatus): string | null {
+  if (s.state === 'on_battery' || s.state === 'low_battery') {
+    return `~${s.battery.charge}%${s.battery.chargeEstimated ? ' (estimated)' : ''}`;
+  }
+  if (s.battery.state === 'charging') return 'Charging';
+  if (s.battery.state === 'charged') return 'Charged';
+  return null;
+}
+
 /** The sentence the Overview headline leads with while the house runs on the UPS. */
 export function batteryNote(s: UPSStatus | null, now: number = Date.now()): string | null {
   if (!s || !s.available) return null;
