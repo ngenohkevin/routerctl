@@ -465,11 +465,36 @@ export interface LatencyTarget {
 }
 
 // Streaming Quality Test
+/** A website handshake — only in streaming results saved before 2026-10-10. */
 export interface StreamingCDN {
   name: string;
   host: string;
   pingMs: number;
   reachable: boolean;
+}
+
+/** One Netflix server fast.com assigned to the line under test. */
+export interface NetflixServer {
+  host: string;
+  city: string;
+  country: string;
+  connectMs: number; // TCP handshake; 0 = unreachable
+  mbps: number;      // steady download over 4 streams
+  error?: string;
+}
+
+export interface NetflixResult {
+  servers: NetflixServer[];
+  bestMbps: number;  // the fastest server: what a Netflix player can get
+  error?: string;    // why Netflix couldn't be measured (verdicts then use Cloudflare)
+}
+
+/** The Google cache YouTube assigns the line's IP. */
+export interface YouTubeCache {
+  node?: string;     // e.g. "jtlinternet-nbo2"
+  location?: string; // city
+  inIsp: boolean;    // a Google Global Cache inside the ISP's network
+  error?: string;
 }
 
 export interface StreamingQualityVerdict {
@@ -480,15 +505,18 @@ export interface StreamingQualityVerdict {
 }
 
 export interface StreamingTestResult {
-  sustainedDownload: number;  // Mbps averaged over the whole window
-  peakDownload: number;       // best 1s window in Mbps
+  sustainedDownload: number;  // Mbps from Cloudflare, steady after the grace period
+  peakDownload: number;       // best 1s window in Mbps (Cloudflare)
   idleLatency: number;        // ms
   loadedLatency: number;      // ms
   worstLatency: number;       // ms (p95 under load)
   latencyRise: number;        // ms, loaded - idle
   bufferbloatGrade: string;   // A+ / A / B / C / D / F / —
-  cdns: StreamingCDN[];
+  netflix?: NetflixResult;
+  youtube?: YouTubeCache;
+  cdns?: StreamingCDN[];      // website handshakes — older results only
   qualities: StreamingQualityVerdict[];
+  verdictSource?: 'netflix' | 'cloudflare'; // whose speed the verdicts judge
   timestamp: string;
   durationSeconds: number;
   wan?: string;      // uplink interface the test ran through
@@ -513,12 +541,11 @@ export interface SpeedProgressEvent {
 
 /** One event from the streaming test stream (/nettest/streaming). */
 export interface StreamingProgressEvent {
-  phase: 'cdn' | 'idle' | 'download' | 'bufferbloat' | 'done' | 'error';
-  speed?: number;
-  progress?: number;
+  phase: 'services' | 'netflix' | 'idle' | 'download' | 'bufferbloat' | 'done' | 'error';
+  speed?: number;     // live Mbps (netflix, download)
+  progress?: number;  // 0..1 through the netflix or download phase
   latency?: number;
-  message?: string;
-  cdn?: StreamingCDN;
+  message?: string;   // netflix: "Netflix · Nairobi, KE"
   result?: StreamingTestResult;
   error?: string;
 }

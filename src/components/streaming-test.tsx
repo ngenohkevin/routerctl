@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Square, CheckCircle2, XCircle, ChevronDown, Activity, Trash2, Tv, History } from 'lucide-react';
+import { Play, Square, CheckCircle2, XCircle, ChevronDown, Server, Trash2, Tv, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -14,15 +14,19 @@ import { cn } from '@/lib/utils';
 import { formatMbps, formatMs, gradeMeaning, gradeTone } from '@/lib/speed';
 import { useNetwork } from '@/stores/network';
 import { toast } from 'sonner';
-import type { StreamingTestResult, StreamingCDN, WANLink } from '@/types';
+import type { StreamingTestResult, WANLink } from '@/types';
 
-type Phase = 'idle' | 'cdn' | 'idle-latency' | 'download' | 'done' | 'error' | 'cancelled';
+type Phase = 'idle' | 'services' | 'netflix' | 'idle-latency' | 'download' | 'done' | 'error' | 'cancelled';
 
 const STEPS: { phase: Phase; label: string }[] = [
-  { phase: 'cdn', label: 'Streaming services' },
+  { phase: 'services', label: 'Find servers' },
+  { phase: 'netflix', label: 'Netflix speed' },
   { phase: 'idle-latency', label: 'Idle latency' },
-  { phase: 'download', label: 'Line under load · 20s' },
+  { phase: 'download', label: 'Under load · 20s' },
 ];
+
+/** Phases whose step bar fills with real progress (the others pulse). */
+const PROGRESS_PHASES: Phase[] = ['netflix', 'download'];
 
 const GRADE_STYLE = {
   link: 'text-link border-link/35 bg-link/10',
@@ -67,7 +71,7 @@ export function StreamingTest({
   const [liveLatency, setLiveLatency] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
   const [note, setNote] = useState<string | null>(null);
-  const [cdns, setCdns] = useState<StreamingCDN[]>([]);
+  const [place, setPlace] = useState<string | null>(null); // Netflix server being measured
   const [result, setResult] = useState<StreamingTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<StreamingTestResult[]>([]);
@@ -75,7 +79,7 @@ export function StreamingTest({
   const [showCalculator, setShowCalculator] = useState(false);
   const cancelRef = useRef<(() => void) | null>(null);
 
-  const running = phase === 'cdn' || phase === 'idle-latency' || phase === 'download';
+  const running = phase === 'services' || phase === 'netflix' || phase === 'idle-latency' || phase === 'download';
 
   useEffect(() => {
     onRunningChange?.(running);
@@ -109,22 +113,30 @@ export function StreamingTest({
       }
     }
     cancelRef.current?.();
-    setPhase('cdn');
+    setPhase('services');
     setLiveSpeed(null);
     setLiveLatency(null);
     setProgress(0);
     setNote(null);
-    setCdns([]);
+    setPlace(null);
     setResult(null);
     setError(null);
 
     cancelRef.current = api.runStreamingTest((ev) => {
       switch (ev.phase) {
-        case 'cdn':
-          if (ev.cdn) setCdns((prev) => [...prev, ev.cdn!]);
+        case 'services':
+          setPhase('services');
+          return;
+        case 'netflix':
+          setPhase('netflix');
+          if (ev.speed !== undefined) setLiveSpeed(ev.speed);
+          if (ev.progress !== undefined) setProgress(ev.progress);
+          if (ev.message) setPlace(ev.message.replace(/^Netflix · /, ''));
           return;
         case 'idle':
           setPhase('idle-latency');
+          setLiveSpeed(null);
+          setProgress(0);
           if (ev.message && ev.message.toLowerCase().includes('unreachable')) setNote(ev.message);
           return;
         case 'download':
@@ -163,8 +175,9 @@ export function StreamingTest({
       <Panel>
         <PanelHeader title="Streaming quality" icon={<Tv />} />
         <p className="-mt-1.5 mb-4 max-w-2xl text-sm text-ink-3">
-          Checks the streaming services, then fills the line for 20 seconds and watches latency. Bufferbloat — how much
-          latency rises while the line is busy — decides whether live 4K and video calls hold up.
+          Finds the Netflix servers and YouTube cache this line actually streams from and measures Netflix&apos;s speed,
+          then fills the line from Cloudflare for 20 seconds and watches latency. Bufferbloat — how much latency rises
+          while the line is busy — decides whether live 4K and video calls hold up.
         </p>
 
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
@@ -211,11 +224,12 @@ export function StreamingTest({
         {running && (
           <div className="mt-5 space-y-4 border-t border-hairline-soft pt-4">
             {/* Steps */}
-            <ol className="grid grid-cols-3 gap-2">
+            <ol className="grid grid-cols-4 gap-2">
               {STEPS.map((s, i) => {
                 const done = i < stepIndex;
                 const now = i === stepIndex;
-                const fill = done ? 1 : now ? (s.phase === 'download' ? progress : 0.5) : 0;
+                const measured = PROGRESS_PHASES.includes(s.phase);
+                const fill = done ? 1 : now ? (measured ? progress : 0.5) : 0;
                 return (
                   <li key={s.phase} className="min-w-0">
                     <div className="h-1 overflow-hidden rounded-full bg-inset">
@@ -223,7 +237,7 @@ export function StreamingTest({
                         className={cn(
                           'h-full origin-left transition-transform duration-150 ease-linear',
                           done ? 'bg-link' : 'bg-link/70',
-                          now && s.phase !== 'download' && 'animate-pulse'
+                          now && !measured && 'animate-pulse'
                         )}
                         style={{ transform: `scaleX(${fill})` }}
                       />
@@ -236,10 +250,26 @@ export function StreamingTest({
               })}
             </ol>
 
+            {phase === 'netflix' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="eyebrow">Netflix now</div>
+                  <div className="num mt-1 font-mono text-[22px] font-semibold text-ink">
+                    {liveSpeed != null ? formatMbps(liveSpeed) : '—'}
+                    <span className="ml-1 font-sans text-xs font-normal text-ink-3">Mbps</span>
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="eyebrow">Server</div>
+                  <div className="mt-1 truncate text-sm font-medium text-ink">{place ?? '—'}</div>
+                </div>
+              </div>
+            )}
+
             {phase === 'download' && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="eyebrow">Download now</div>
+                  <div className="eyebrow">Cloudflare now</div>
                   <div className="num mt-1 font-mono text-[22px] font-semibold text-ink">
                     {liveSpeed != null ? formatMbps(liveSpeed) : '—'}
                     <span className="ml-1 font-sans text-xs font-normal text-ink-3">Mbps</span>
@@ -255,24 +285,6 @@ export function StreamingTest({
               </div>
             )}
 
-            {cdns.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {cdns.map((c) => (
-                  <span
-                    key={c.host}
-                    className={cn(
-                      'inline-flex h-6 items-center gap-1 rounded-md border px-2 text-[11px] font-medium',
-                      c.reachable ? 'border-hairline text-ink-2' : 'border-fault/35 text-fault'
-                    )}
-                  >
-                    {c.name}
-                    <span className={cn('num font-mono', c.reachable ? cdnTone(c.pingMs) : '')}>
-                      {c.reachable ? `${c.pingMs.toFixed(0)} ms` : 'unreachable'}
-                    </span>
-                  </span>
-                ))}
-              </div>
-            )}
             {note && <p className="text-xs text-amber">{note}</p>}
           </div>
         )}
@@ -298,10 +310,15 @@ export function StreamingTest({
 
           <StatStrip>
             <Stat
-              label="Sustained"
+              label="Netflix"
+              value={<span className="font-mono">{result.netflix?.bestMbps ? formatMbps(result.netflix.bestMbps) : '—'}</span>}
+              hint={result.netflix?.bestMbps ? 'Mbps · best server' : 'not measured'}
+              tone={result.netflix?.bestMbps ? 'link' : undefined}
+            />
+            <Stat
+              label="Cloudflare"
               value={<span className="font-mono">{formatMbps(result.sustainedDownload)}</span>}
               hint={`Mbps · peak ${formatMbps(result.peakDownload)}`}
-              tone="link"
             />
             <Stat
               label="Idle latency"
@@ -309,21 +326,21 @@ export function StreamingTest({
               hint="ms"
             />
             <Stat
-              label="Loaded latency"
-              value={<span className="font-mono">{result.loadedLatency > 0 ? formatMs(result.loadedLatency) : '—'}</span>}
-              hint={result.worstLatency > 0 ? `ms · p95 ${result.worstLatency.toFixed(0)}` : 'ms'}
-            />
-            <Stat
-              label="Rise"
+              label="Under load"
               value={<span className="font-mono">{result.loadedLatency > 0 ? `+${formatMs(result.latencyRise)}` : '—'}</span>}
-              hint={`ms · grade ${result.bufferbloatGrade}`}
+              hint={result.loadedLatency > 0 ? `ms · ${formatMs(result.loadedLatency)} loaded · ${result.bufferbloatGrade}` : 'ms'}
               tone={gradeTone(result.bufferbloatGrade)}
             />
           </StatStrip>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Panel className="p-0 md:p-0">
-              <PanelHeader title="What will play" icon={<Tv />} className="mb-0 px-4 pt-4 pb-3 md:px-5" />
+              <PanelHeader
+                title="What will play"
+                icon={<Tv />}
+                aside={result.verdictSource === 'netflix' ? 'by Netflix speed' : 'by Cloudflare speed'}
+                className="mb-0 px-4 pt-4 pb-3 md:px-5"
+              />
               <ul className="divide-y divide-hairline-soft border-t border-hairline-soft">
                 {result.qualities.map((q) => (
                   <li key={q.quality} className="flex items-center gap-3 px-4 py-2.5 md:px-5">
@@ -344,23 +361,57 @@ export function StreamingTest({
 
             <Panel className="p-0 md:p-0">
               <PanelHeader
-                title="Streaming services"
-                icon={<Activity />}
-                aside="handshake"
+                title="Where your video comes from"
+                icon={<Server />}
+                aside="connect · speed"
                 className="mb-0 px-4 pt-4 pb-3 md:px-5"
               />
               <ul className="divide-y divide-hairline-soft border-t border-hairline-soft">
-                {result.cdns.map((c) => (
-                  <li key={c.host} className="flex items-center justify-between gap-3 px-4 py-2.5 md:px-5">
+                <li className="px-4 pt-2.5 pb-1 md:px-5">
+                  <div className="eyebrow">Netflix</div>
+                </li>
+                {result.netflix?.error && !result.netflix.servers.length && (
+                  <li className="px-4 py-2.5 text-xs text-fault md:px-5">{result.netflix.error}</li>
+                )}
+                {result.netflix?.servers.map((sv) => (
+                  <li key={sv.host} className="flex items-center justify-between gap-3 px-4 py-2.5 md:px-5">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-ink">{c.name}</div>
-                      <div className="truncate font-mono text-xs text-ink-4">{c.host}</div>
+                      <div className="text-sm font-medium text-ink">
+                        {[sv.city, sv.country].filter(Boolean).join(', ') || 'Netflix server'}
+                      </div>
+                      <div className="truncate font-mono text-xs text-ink-4">{sv.host}</div>
                     </div>
-                    <span className={cn('num shrink-0 font-mono text-sm', c.reachable ? cdnTone(c.pingMs) : 'text-fault')}>
-                      {c.reachable ? `${c.pingMs.toFixed(0)} ms` : 'unreachable'}
-                    </span>
+                    {sv.error ? (
+                      <span className="shrink-0 text-xs text-fault">{sv.error}</span>
+                    ) : (
+                      <div className="num shrink-0 text-right font-mono text-xs">
+                        <div className="text-sm text-link">{formatMbps(sv.mbps)} Mbps</div>
+                        <div className={cdnTone(sv.connectMs)}>{sv.connectMs.toFixed(0)} ms</div>
+                      </div>
+                    )}
                   </li>
                 ))}
+                <li className="px-4 pt-2.5 pb-1 md:px-5">
+                  <div className="eyebrow">YouTube</div>
+                </li>
+                <li className="flex items-center justify-between gap-3 px-4 py-2.5 md:px-5">
+                  {result.youtube?.node ? (
+                    <>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-ink">
+                          {result.youtube.location ?? 'Google cache'}
+                          <span className="font-normal text-ink-3">
+                            {result.youtube.inIsp ? ' · inside your ISP' : ' · Google edge'}
+                          </span>
+                        </div>
+                        <div className="truncate font-mono text-xs text-ink-4">{result.youtube.node}</div>
+                      </div>
+                      <span className="shrink-0 text-xs text-ink-3">assigned cache</span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-fault">{result.youtube?.error ?? 'Not measured'}</span>
+                  )}
+                </li>
               </ul>
             </Panel>
           </div>
@@ -391,8 +442,19 @@ export function StreamingTest({
                   </div>
                 </div>
                 <div className="num shrink-0 text-right font-mono text-xs">
-                  <div className="text-link">{formatMbps(h.sustainedDownload)} Mbps</div>
-                  <div className="text-ink-4">{h.loadedLatency > 0 ? `+${h.latencyRise.toFixed(0)} ms` : '—'}</div>
+                  {h.netflix?.bestMbps ? (
+                    <>
+                      <div className="text-link">Netflix {formatMbps(h.netflix.bestMbps)} Mbps</div>
+                      <div className="text-ink-4">
+                        Cloudflare {formatMbps(h.sustainedDownload)} · {h.loadedLatency > 0 ? `+${h.latencyRise.toFixed(0)} ms` : '—'}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-link">{formatMbps(h.sustainedDownload)} Mbps</div>
+                      <div className="text-ink-4">{h.loadedLatency > 0 ? `+${h.latencyRise.toFixed(0)} ms` : '—'}</div>
+                    </>
+                  )}
                 </div>
               </li>
             ))}
