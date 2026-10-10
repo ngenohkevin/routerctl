@@ -9,6 +9,7 @@ import { clock, dayClock, formatDuration, secondsSince } from '@/lib/power';
 import type { UPSEvent, UPSOutage } from '@/types';
 
 const EVENT_TEXT: Record<string, string> = {
+  'beeper:toggled': 'Beeper toggled from the dashboard',
   'beeper:muted': 'Beeper muted from the dashboard',
   'beeper:unmuted': 'Beeper turned back on from the dashboard',
   'self_test:started': 'Self-test requested',
@@ -18,6 +19,7 @@ const EVENT_TEXT: Record<string, string> = {
 
 // A failed action must not read as if it happened.
 const FAILED_TEXT: Record<string, string> = {
+  'beeper:toggled': 'Couldn’t send the beeper command',
   'beeper:muted': 'Couldn’t mute the beeper',
   'beeper:unmuted': 'Couldn’t turn the beeper back on',
   'self_test:started': 'Self-test didn’t start',

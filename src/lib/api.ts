@@ -649,8 +649,9 @@ export const api = {
     return fetchApi<UPSHistory>('/ups/history');
   },
 
-  async setUpsBeeper(enabled: boolean): Promise<UPSStatus> {
-    return fetchApi<UPSStatus>('/ups/beeper', { method: 'POST', body: JSON.stringify({ enabled }) });
+  /** One beeper toggle (agent allows it only on battery). The UPS can't report its beeper state. */
+  async toggleUpsBeeper(): Promise<UPSStatus> {
+    return fetchApi<UPSStatus>('/ups/beeper', { method: 'POST' });
   },
 
   async upsTest(action: 'start' | 'stop'): Promise<UPSStatus> {

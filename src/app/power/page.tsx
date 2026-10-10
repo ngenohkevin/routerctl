@@ -114,9 +114,9 @@ export default function PowerPage() {
             />
             <Stat label="Load" value={`${s.load}%`} hint="of the UPS's capacity" />
             <Stat
-              label="Beeper"
-              value={s.beeper === 'disabled' ? 'Muted' : 'On'}
-              hint={s.beeper === 'disabled' ? 'silent during a cut' : 'beeps during a cut'}
+              label="Output"
+              value={`${Math.round(s.outputVoltage)} V`}
+              hint="to the router, ONTs and Pi"
             />
           </StatStrip>
         )}

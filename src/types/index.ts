@@ -545,7 +545,7 @@ export interface UPSOutage {
 export interface UPSEvent {
   at: string;
   kind: 'beeper' | 'self_test';
-  detail: 'muted' | 'unmuted' | 'started' | 'stopped' | 'finished';
+  detail: 'toggled' | 'started' | 'stopped' | 'finished' | 'muted' | 'unmuted'; // muted/unmuted: older entries
   ok: boolean;
   note?: string;
 }
