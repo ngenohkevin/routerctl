@@ -11,16 +11,20 @@ import type { UPSStatus } from '@/types';
 
 /** Toggle the beeper during a cut and run the quick self-test. Nothing here can cut power. */
 export function PowerControls({ onChanged }: { onChanged: () => void }) {
-  const { status: s, failed } = useUps();
+  const { status: s, failed, loaded } = useUps();
   const setStatus = useUpsStore((st) => st.setStatus);
   const [busy, setBusy] = useState<'beeper' | 'test' | null>(null);
 
   const usable = !!s && s.available && !failed;
-  const blocked = !usable
-    ? 'The UPS isn’t reporting, so it can’t take commands.'
-    : !s.controls.configured
-      ? 'Controls aren’t set up on the Pi.'
-      : null;
+  const canCommand = loaded && usable && s.controls.configured;
+  // Why the buttons are off. Nothing while the first reading loads.
+  const blocked = !loaded
+    ? null
+    : !usable
+      ? 'The UPS isn’t reporting, so it can’t take commands.'
+      : !s.controls.configured
+        ? 'Controls aren’t set up on the Pi.'
+        : null;
   const onBattery = usable && (s.state === 'on_battery' || s.state === 'low_battery');
   const testBlocked = usable && s.state !== 'online' ? 'Only on mains: the test runs the UPS on battery for about 10 seconds.' : null;
 
@@ -48,7 +52,7 @@ export function PowerControls({ onChanged }: { onChanged: () => void }) {
             variant="outline"
             size="sm"
             className="h-8"
-            disabled={!!blocked || !onBattery || busy !== null}
+            disabled={!canCommand || !onBattery || busy !== null}
             onClick={() => run('beeper', () => api.toggleUpsBeeper(), 'Beeper toggled')}
           >
             Toggle beeper
@@ -69,7 +73,7 @@ export function PowerControls({ onChanged }: { onChanged: () => void }) {
                 variant="outline"
                 size="sm"
                 className="h-8"
-                disabled={!!blocked || busy !== null}
+                disabled={!canCommand || busy !== null}
                 onClick={() => run('test', () => api.upsTest('stop'), 'Self-test stopped')}
               >
                 Stop
@@ -80,7 +84,7 @@ export function PowerControls({ onChanged }: { onChanged: () => void }) {
               variant="outline"
               size="sm"
               className="h-8"
-              disabled={!!blocked || !!testBlocked || busy !== null}
+              disabled={!canCommand || !!testBlocked || busy !== null}
               onClick={() => run('test', () => api.upsTest('start'), 'Self-test requested')}
             >
               Run quick self-test
