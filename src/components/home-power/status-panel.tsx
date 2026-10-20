@@ -11,6 +11,7 @@ import { clock } from '@/lib/power';
 import { homePowerHeadline, homePowerPanelTone, homePowerTone, tvLine } from '@/lib/home-power';
 import { useNow } from '@/lib/use-now';
 import { usePowerStore } from '@/stores/power';
+import { TOUCH } from './touch';
 import type { PowerStatus } from '@/types';
 
 /** The headline, the countdown and its buttons, the TV Group switch, and a running test. */
@@ -65,6 +66,7 @@ export function PowerStatusPanel({
             {cut.mode === 'off' ? (
               <Button
                 size="sm"
+                className={TOUCH}
                 disabled={!!busy}
                 onClick={() => run('on', () => api.setPowerTV(true), `TV group on for ${cut.cutoffMinutes} minutes`)}
               >
@@ -72,18 +74,18 @@ export function PowerStatusPanel({
               </Button>
             ) : (
               <>
-                <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('p10', () => api.extendPowerCut({ minutes: 10 }), 'Ten more minutes')}>
+                <Button size="sm" variant="outline" className={TOUCH} disabled={!!busy} onClick={() => run('p10', () => api.extendPowerCut({ minutes: 10 }), 'Ten more minutes')}>
                   +10 min
                 </Button>
-                <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('p30', () => api.extendPowerCut({ minutes: 30 }), 'Thirty more minutes')}>
+                <Button size="sm" variant="outline" className={TOUCH} disabled={!!busy} onClick={() => run('p30', () => api.extendPowerCut({ minutes: 30 }), 'Thirty more minutes')}>
                   +30 min
                 </Button>
                 {cut.mode !== 'until_power' && (
-                  <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('until', () => api.extendPowerCut({ until: 'power' }), 'TV group stays on until power returns')}>
+                  <Button size="sm" variant="outline" className={TOUCH} disabled={!!busy} onClick={() => run('until', () => api.extendPowerCut({ until: 'power' }), 'TV group stays on until power returns')}>
                     Until power returns
                   </Button>
                 )}
-                <Button size="sm" variant="destructive" disabled={!!busy} onClick={() => run('off', () => api.extendPowerCut({ off: true }), 'TV group off')}>
+                <Button size="sm" variant="destructive" className={TOUCH} disabled={!!busy} onClick={() => run('off', () => api.extendPowerCut({ off: true }), 'TV group off')}>
                   Off now
                 </Button>
               </>
@@ -102,6 +104,8 @@ export function PowerStatusPanel({
             disabled={!!busy || tv.on === null}
             onCheckedChange={(v) => run('tv', () => api.setPowerTV(v), v ? 'TV group on' : 'TV group off')}
             aria-label="TV group power"
+            // The switch stays small; on touch an invisible 44px pad around it takes the tap.
+            className="relative pointer-coarse:after:absolute pointer-coarse:after:-inset-[13px]"
           />
         </div>
       )}
@@ -111,7 +115,7 @@ export function PowerStatusPanel({
           <span className="text-sm text-ink">
             Test cut: Mains is off until {clock(s.test.ends)} (cutoff {s.test.cutoffMinutes} min).
           </span>
-          <Button size="sm" variant="outline" disabled={!!busy} onClick={() => run('stop', () => api.stopPowerTest(), 'Test stopped, Mains back on')}>
+          <Button size="sm" variant="outline" className={TOUCH} disabled={!!busy} onClick={() => run('stop', () => api.stopPowerTest(), 'Test stopped, Mains back on')}>
             Stop
           </Button>
         </div>

@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Panel, PanelHeader } from '@/components/shell/panel';
 import { api } from '@/lib/api';
+import { TOUCH } from './touch';
 import { usePowerStore } from '@/stores/power';
 import type { PowerStatus } from '@/types';
 
@@ -91,7 +92,7 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
         Each cut starts from the cutoff; extensions apply to that cut only. In quiet hours the Pi’s messages arrive silently;
         Kuma’s power-cut alert still sounds.
       </p>
-      <Button size="sm" onClick={save} disabled={busy}>
+      <Button size="sm" className={TOUCH} onClick={save} disabled={busy}>
         Save settings
       </Button>
 
@@ -107,7 +108,7 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
           </Label>
           <select
             id="power-test-length"
-            className="h-8 rounded-md border border-hairline bg-transparent px-2 text-sm text-ink"
+            className={`h-8 rounded-md border border-hairline bg-transparent px-2 text-sm text-ink ${TOUCH}`}
             value={minutes}
             onChange={(e) => setMinutes(Number(e.target.value) as 5 | 15 | 30)}
           >
@@ -115,11 +116,17 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
             <option value={15}>15 minutes</option>
             <option value={30}>30 minutes</option>
           </select>
-          <label htmlFor="power-test-quick" className="flex items-center gap-2 text-sm text-ink-2">
-            <input id="power-test-quick" type="checkbox" checked={quick} onChange={(e) => setQuick(e.target.checked)} />
+          <label htmlFor="power-test-quick" className="flex items-center gap-2 text-sm text-ink-2 pointer-coarse:min-h-11">
+            <input
+              id="power-test-quick"
+              type="checkbox"
+              className="size-4 accent-link pointer-coarse:size-5"
+              checked={quick}
+              onChange={(e) => setQuick(e.target.checked)}
+            />
             2-minute cutoff for this test
           </label>
-          <Button size="sm" variant="outline" disabled={busy || !!testBlocked} onClick={() => setConfirming(true)}>
+          <Button size="sm" variant="outline" className={TOUCH} disabled={busy || !!testBlocked} onClick={() => setConfirming(true)}>
             Test a power cut
           </Button>
         </div>
@@ -137,8 +144,8 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={startTest} disabled={busy}>
+            <AlertDialogCancel className={TOUCH}>Cancel</AlertDialogCancel>
+            <AlertDialogAction className={TOUCH} onClick={startTest} disabled={busy}>
               Start the test
             </AlertDialogAction>
           </AlertDialogFooter>
