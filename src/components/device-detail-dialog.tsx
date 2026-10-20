@@ -69,7 +69,7 @@ export function DeviceDetailDialog({ device, open, onOpenChange }: DeviceDetailD
             <Badge variant={isOnline ? 'outline' : 'secondary'} className={isOnline ? 'text-green-500 border-green-500' : ''}>
               {isOnline ? 'Online' : 'Offline'}
             </Badge>
-            {device.isBlocked && <Badge variant="destructive">Blocked</Badge>}
+            {device.isBlocked && <Badge variant="destructive">Internet blocked</Badge>}
             {device.isExempt && (
               <Badge variant="outline" className="text-emerald-500 border-emerald-500">Exempt</Badge>
             )}

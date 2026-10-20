@@ -125,7 +125,7 @@ export function connectionLabel(d: Device): string {
 /** The policy chips worth showing on a row. */
 export function policyChips(d: Device): { label: string; tone: 'fault' | 'amber' | 'link' | 'air' }[] {
   const out: { label: string; tone: 'fault' | 'amber' | 'link' | 'air' }[] = [];
-  if (d.isBlocked) out.push({ label: 'Blocked', tone: 'fault' });
+  if (d.isBlocked) out.push({ label: 'Internet blocked', tone: 'fault' });
   if (d.isExempt) out.push({ label: 'No limit', tone: 'link' });
   else if (d.hasBWLimit && !d.isDefaultLimit && d.policy?.mode === 'limit')
     out.push({ label: `Limit ${d.policy.download ?? d.downloadLimit}`, tone: 'amber' });

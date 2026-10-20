@@ -4,7 +4,8 @@ import { Cable, Globe, Wifi } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Led, toneFor, type LedTone } from '@/components/shell/led';
 import { batteryNote } from '@/lib/power';
-import type { WANLink, WANFailoverStatus, WiFiRadio, SystemInfo, UPSStatus } from '@/types';
+import { homePowerNote } from '@/lib/home-power';
+import type { WANLink, WANFailoverStatus, WiFiRadio, SystemInfo, UPSStatus, PowerStatus } from '@/types';
 
 interface Verdict {
   headline: string;
@@ -21,10 +22,12 @@ export function verdictFor(
   links: WANLink[],
   failover: WANFailoverStatus | null,
   loaded: boolean,
-  ups: UPSStatus | null = null
+  ups: UPSStatus | null = null,
+  power: PowerStatus | null = null
 ): Verdict {
   const v = lineVerdict(links, failover, loaded);
-  const note = batteryNote(ups);
+  // The plugs know about a cut when the agent runs them; otherwise the UPS does.
+  const note = homePowerNote(power) ?? batteryNote(ups);
   if (!note) return v;
   const tone: LedTone = ups?.state === 'low_battery' || v.tone === 'fault' ? 'fault' : 'amber';
   return { ...v, detail: v.detail ? `${note} ${v.detail}` : note, tone };
@@ -222,6 +225,7 @@ export function NetworkPath({
   systemInfo,
   loaded,
   ups,
+  power,
 }: {
   links: WANLink[];
   failover: WANFailoverStatus | null;
@@ -230,8 +234,9 @@ export function NetworkPath({
   systemInfo: SystemInfo | null;
   loaded: boolean;
   ups?: UPSStatus | null;
+  power?: PowerStatus | null;
 }) {
-  const verdict = verdictFor(links, failover, loaded, ups ?? null);
+  const verdict = verdictFor(links, failover, loaded, ups ?? null, power ?? null);
   const aps = accessPoints(radios, wiredCount);
   const primaryTone = links.find((l) => l.primary) ? lineTone(links.find((l) => l.primary)!) : 'off';
 

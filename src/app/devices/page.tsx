@@ -18,6 +18,7 @@ import { useDevicesStore } from '@/stores/devices';
 import { api, isAuthenticated } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { connectionLabel, displayName, identityLine, isOnline, policyChips } from '@/lib/device';
+import { usePower } from '@/stores/power';
 import type { Device } from '@/types';
 
 type Filter = 'all' | 'online' | 'new' | 'offline' | 'blocked';
@@ -42,7 +43,11 @@ const byLastSeen = (a: Device, b: Device) => (b.lastSeen || '').localeCompare(a.
 function DeviceRow({ d, onOpen }: { d: Device; onOpen: () => void }) {
   const online = isOnline(d);
   const line = identityLine(d);
-  const chips = policyChips(d);
+  // The two Tapo plugs: a plain chip here (the row is one button), the link
+  // to the Power page is in the sheet the row opens.
+  const { status: power } = usePower(30_000);
+  const powerPlug = (power?.plugs ?? []).find((p) => p.mac.toUpperCase() === d.mac.toUpperCase());
+  const chips = [...(powerPlug ? [{ label: `Power: ${powerPlug.name}`, tone: 'link' as const }] : []), ...policyChips(d)];
   return (
     <li>
       <button
@@ -156,7 +161,7 @@ export default function DevicesPage() {
         ]
       : [
           {
-            title: { online: 'Online', new: 'New', offline: 'Offline', blocked: 'Blocked' }[filter],
+            title: { online: 'Online', new: 'New', offline: 'Offline', blocked: 'Internet blocked' }[filter],
             list: pick(filter).sort(filter === 'offline' || filter === 'new' ? byLastSeen : byName),
           },
         ];
@@ -166,7 +171,7 @@ export default function DevicesPage() {
     { key: 'online', label: 'Online' },
     { key: 'new', label: 'New', hide: counts.new === 0 },
     { key: 'offline', label: 'Offline' },
-    { key: 'blocked', label: 'Blocked', hide: counts.blocked === 0 },
+    { key: 'blocked', label: 'Internet blocked', hide: counts.blocked === 0 },
   ];
 
   const openDevice = devices.find((d) => d.mac === openMac) ?? null;

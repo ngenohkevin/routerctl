@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { Ban, Check, Gauge, Pin, Power, ShieldCheck, Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -25,6 +26,7 @@ import { Chip } from '@/components/shell/chip';
 import { Led } from '@/components/shell/led';
 import { timeAgo } from '@/components/device-detail-dialog';
 import { useDevicesStore } from '@/stores/devices';
+import { usePower } from '@/stores/power';
 import { api } from '@/lib/api';
 import { cn, formatBandwidth, formatDuration } from '@/lib/utils';
 import {
@@ -107,10 +109,14 @@ export function DeviceSheet({ device, open, onOpenChange, defaultLimit }: Device
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mac]);
 
+  // Called before the early return: hooks run on every render.
+  const { status: power } = usePower(30_000);
+
   if (!device) return null;
 
   const online = isOnline(device);
   const name = displayName(device);
+  const powerPlug = (power?.plugs ?? []).find((p) => p.mac.toUpperCase() === device.mac.toUpperCase());
   const detectedType = device.detectedType ?? device.deviceType;
   const detectedModel = device.detectedModel ?? device.deviceModel;
   const remembered = !!device.remembered;
@@ -183,6 +189,15 @@ export function DeviceSheet({ device, open, onOpenChange, defaultLimit }: Device
                 <SheetDescription className="mt-0.5 text-[13px] text-ink-3">{statusLine}</SheetDescription>
               </div>
             </div>
+            {powerPlug && (
+              <Link
+                href="/power"
+                className="flex items-center justify-between gap-3 rounded-lg border border-hairline px-3 py-2.5 text-[13px] transition-colors duration-150 hover:bg-raised/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/50"
+              >
+                <span className="text-ink-2">Home power plug: {powerPlug.name}</span>
+                <span className="shrink-0 text-link">Power page</span>
+              </Link>
+            )}
             {device.isNew && (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-amber/35 bg-amber/5 px-3 py-2.5">
                 <p className="text-[13px] text-ink-2">
@@ -440,7 +455,7 @@ export function DeviceSheet({ device, open, onOpenChange, defaultLimit }: Device
               onClick={() => {
                 const which = confirm;
                 setConfirm(null);
-                if (which === 'block') run(() => store.blockDevice(device.mac), 'Blocked');
+                if (which === 'block') run(() => store.blockDevice(device.mac), 'Internet blocked');
                 if (which === 'disconnect') run(() => store.disconnectDevice(device.mac), 'Disconnected');
                 if (which === 'forget')
                   run(async () => {

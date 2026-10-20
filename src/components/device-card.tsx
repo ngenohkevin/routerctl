@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import {
   Ban,
   Cable,
@@ -36,6 +37,7 @@ import type { Device } from '@/types';
 import { cn, formatBandwidth, formatDuration, prettyBand } from '@/lib/utils';
 import { timeAgo } from '@/components/device-detail-dialog';
 import { displayName, glyphFor, identityLine } from '@/lib/device';
+import { usePower } from '@/stores/power';
 
 // Randomized/private MACs (2nd hex digit 2, 6, A or E) are phones and laptops on Wi-Fi.
 function hasRandomizedMAC(mac: string): boolean {
@@ -121,6 +123,8 @@ export function DeviceCard({
   };
 
   const openDetails = onShowDetails ? () => onShowDetails(device.mac) : undefined;
+  const { status: power } = usePower(30_000);
+  const powerPlug = (power?.plugs ?? []).find((p) => p.mac.toUpperCase() === device.mac.toUpperCase());
 
   return (
     <article
@@ -253,10 +257,15 @@ export function DeviceCard({
       </div>
 
       {/* State chips */}
-      {(device.isBlocked || device.isExempt || hasPriority || device.hasBWLimit || (isOnline && isWifi && band)) && (
+      {(device.isBlocked || device.isExempt || hasPriority || device.hasBWLimit || (isOnline && isWifi && band) || powerPlug) && (
         <div className="mt-3 flex flex-wrap gap-1.5">
+          {powerPlug && (
+            <Link href="/power" className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/50">
+              <Chip tone="link">Power: {powerPlug.name}</Chip>
+            </Link>
+          )}
           {device.isNew && <Chip tone="amber">New</Chip>}
-          {device.isBlocked && <Chip tone="fault">Blocked</Chip>}
+          {device.isBlocked && <Chip tone="fault">Internet blocked</Chip>}
           {isOnline && isWifi && band && <Chip tone="air">{band}</Chip>}
           {hasPriority && (
             <Chip tone="amber">

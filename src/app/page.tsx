@@ -29,6 +29,7 @@ import { PriorityDialog } from '@/components/priority-dialog';
 import { useDevicesStore } from '@/stores/devices';
 import { useNetwork } from '@/stores/network';
 import { useUps } from '@/stores/ups';
+import { usePower } from '@/stores/power';
 import { toast } from 'sonner';
 import type { Device } from '@/types';
 
@@ -79,6 +80,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState<DeviceFilter>('all');
   const network = useNetwork();
   const ups = useUps();
+  const power = usePower();
 
   useEffect(() => {
     // Initial fetch
@@ -312,7 +314,7 @@ export default function Dashboard() {
     { key: 'wifi', label: 'Wi-Fi', count: stats.wifi, list: wifiDevices, empty: 'No Wi-Fi devices are connected' },
     { key: 'ethernet', label: 'Wired', count: stats.ethernet, list: ethernetDevices, empty: 'No wired devices are connected' },
     { key: 'disconnected', label: 'Offline', count: stats.disconnected, list: disconnectedDevices, empty: 'No offline devices', hideWhenZero: true },
-    { key: 'blocked', label: 'Blocked', count: stats.blocked, list: blockedDevices, empty: 'No blocked devices', hideWhenZero: true },
+    { key: 'blocked', label: 'Internet blocked', count: stats.blocked, list: blockedDevices, empty: 'No devices with internet blocked', hideWhenZero: true },
   ];
   const activeFilter = filters.find((f) => f.key === filter) ?? filters[0];
 
@@ -333,6 +335,7 @@ export default function Dashboard() {
           systemInfo={systemInfo}
           loaded={network.loaded}
           ups={ups.failed ? null : ups.status}
+          power={power.failed ? null : power.status}
         />
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:gap-8">
