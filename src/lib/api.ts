@@ -30,6 +30,10 @@ import type {
   WiFiStatus,
   UPSStatus,
   UPSHistory,
+  PowerExtendRequest,
+  PowerHistory,
+  PowerSettings,
+  PowerStatus,
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_AGENT_URL || '/api';
@@ -656,6 +660,35 @@ export const api = {
 
   async upsTest(action: 'start' | 'stop'): Promise<UPSStatus> {
     return fetchApi<UPSStatus>('/ups/test', { method: 'POST', body: JSON.stringify({ action }) });
+  },
+
+  // Home power (Tapo plugs on the Pi)
+  async getPower(): Promise<PowerStatus> {
+    return fetchApi<PowerStatus>('/power');
+  },
+
+  async getPowerHistory(): Promise<PowerHistory> {
+    return fetchApi<PowerHistory>('/power/history');
+  },
+
+  async setPowerTV(on: boolean): Promise<PowerStatus> {
+    return fetchApi<PowerStatus>('/power/tv', { method: 'POST', body: JSON.stringify({ on }) });
+  },
+
+  async extendPowerCut(req: PowerExtendRequest): Promise<PowerStatus> {
+    return fetchApi<PowerStatus>('/power/cut/extend', { method: 'POST', body: JSON.stringify(req) });
+  },
+
+  async updatePowerSettings(s: PowerSettings): Promise<PowerStatus> {
+    return fetchApi<PowerStatus>('/power/settings', { method: 'PUT', body: JSON.stringify(s) });
+  },
+
+  async startPowerTest(minutes: 5 | 15 | 30, cutoffMinutes?: number): Promise<PowerStatus> {
+    return fetchApi<PowerStatus>('/power/test', { method: 'POST', body: JSON.stringify({ minutes, cutoffMinutes }) });
+  },
+
+  async stopPowerTest(): Promise<PowerStatus> {
+    return fetchApi<PowerStatus>('/power/test', { method: 'DELETE' });
   },
 
   async getWanFailover(): Promise<WANFailoverStatus> {

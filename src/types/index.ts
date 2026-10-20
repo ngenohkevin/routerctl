@@ -609,3 +609,119 @@ export interface UPSHistory {
   events: UPSEvent[] | null;
   since: string | null;
 }
+
+// Home power (two Tapo plugs; the Delta in phase 2) — /api/power*
+export type PowerVerdict = 'on' | 'off' | 'unknown';
+export type PowerCutMode = 'countdown' | 'until_power' | 'off';
+export type PowerExtensionKind = 'plus10' | 'plus30' | 'until_power' | 'off_now';
+
+export interface PowerExtension {
+  at: string;
+  kind: PowerExtensionKind;
+}
+
+export interface PowerCutView {
+  start: string;
+  startApprox: boolean;
+  test: boolean;
+  mode: PowerCutMode;
+  switchOffAt: string | null;
+  tvOffAt: string | null;
+  tvOffByPi: boolean;
+  cutoffMinutes: number;
+  extensions: PowerExtension[] | null;
+  mainsBackSince: string | null;
+}
+
+export interface PowerPlug {
+  role: 'mains' | 'tv';
+  name: string;
+  mac: string;
+  ip: string;
+  reachable: boolean;
+  on: boolean | null;
+  onTimeSec: number;
+  firmware: string;
+  firstFirmware: string;
+  hardware: string;
+  rssi: number;
+  internetBlocked: boolean | null;
+  lastSeen: string | null;
+}
+
+export interface PowerProblem {
+  code: string;
+  role?: string;
+  since: string;
+  text: string;
+}
+
+export interface PowerSettings {
+  cutoffMinutes: number;
+  quietStart: string;
+  quietEnd: string;
+}
+
+export interface PowerTest {
+  start: string;
+  ends: string;
+  cutoffMinutes: number;
+}
+
+export interface PowerCut {
+  start: string;
+  startApprox?: boolean;
+  end: string | null;
+  durationSec: number;
+  tvOffAt?: string;
+  tvRestored?: boolean;
+  tvOffAtStart?: boolean;
+  extensions?: PowerExtension[];
+  overrides?: string[];
+  untilPower?: boolean;
+  test?: boolean;
+  ranOut?: boolean;
+  ranOutAt?: string;
+  source?: 'hikvision';
+  lowestBatteryV?: number;
+  peakLoad?: number;
+}
+
+export interface PowerStatus {
+  configured: boolean;
+  reason?: string;
+  mains: PowerVerdict;
+  mainsSince: string | null;
+  cut: PowerCutView | null;
+  plugs: PowerPlug[] | null;
+  problems: PowerProblem[] | null;
+  settings: PowerSettings;
+  alertsConfigured: boolean;
+  test: PowerTest | null;
+  lastCut: PowerCut | null;
+  delta: null;
+  updatedAt: string | null;
+}
+
+export interface PowerEvent {
+  at: string;
+  kind: 'switch' | 'problem' | 'settings' | 'test' | 'plug';
+  detail: string;
+  ok: boolean;
+  note?: string;
+}
+
+export interface PowerPoint {
+  t: string;
+  mains: PowerVerdict;
+  tvOn: boolean | null;
+}
+
+export interface PowerHistory {
+  cuts: PowerCut[] | null;
+  events: PowerEvent[] | null;
+  series: PowerPoint[] | null;
+  since: string | null;
+}
+
+export type PowerExtendRequest = { minutes: 10 | 30 } | { until: 'power' } | { off: true };
