@@ -34,24 +34,31 @@ export const usePowerStore = create<PowerStoreState>((set) => ({
   setStatus: (status) => set((st) => ({ status, loaded: true, failed: false, configuredOnce: st.configuredOnce || status.configured })),
 }));
 
-let subscribers = 0;
+// One timer for every subscriber, at the fastest interval any of them asked
+// for: the Overview's device cards ask for 30 s, but the Power card and the
+// headline on the same page need 5 s during a cut.
+const wanted: number[] = [];
 let timer: ReturnType<typeof setInterval> | null = null;
+let timerEvery = 0;
+
+function retime() {
+  const every = wanted.length > 0 ? Math.min(...wanted) : 0;
+  if (every === timerEvery) return;
+  if (timer) clearInterval(timer);
+  timer = every ? setInterval(() => usePowerStore.getState().refresh(), every) : null;
+  timerEvery = every;
+}
 
 /** Subscribe to the shared power poll (ref-counted; one timer). */
 export function usePower(intervalMs = 5000) {
   const state = usePowerStore();
   useEffect(() => {
-    subscribers++;
-    if (subscribers === 1) {
-      usePowerStore.getState().refresh();
-      timer = setInterval(() => usePowerStore.getState().refresh(), intervalMs);
-    }
+    if (wanted.length === 0) usePowerStore.getState().refresh();
+    wanted.push(intervalMs);
+    retime();
     return () => {
-      subscribers--;
-      if (subscribers === 0 && timer) {
-        clearInterval(timer);
-        timer = null;
-      }
+      wanted.splice(wanted.indexOf(intervalMs), 1);
+      retime();
     };
   }, [intervalMs]);
   return state;
