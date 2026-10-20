@@ -278,7 +278,7 @@ export default function Dashboard() {
       );
     }
     return (
-      <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+      <div className="grid gap-3 @[30rem]:grid-cols-2 @[52rem]:grid-cols-3">
         {visible.map((device) => (
           <DeviceCard
             key={device.mac}
@@ -336,8 +336,9 @@ export default function Dashboard() {
         />
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:gap-8">
-          {/* Devices */}
-          <section aria-labelledby="devices-heading" className="min-w-0 space-y-4">
+          {/* Devices — a container, so the cards go one, two or three across by the column's own
+              width; the side column and the rail (wide or folded) change it at the same viewport width. */}
+          <section aria-labelledby="devices-heading" className="@container min-w-0 space-y-4">
             <div className="flex items-end justify-between gap-3">
               <div>
                 <h2 id="devices-heading" className="text-lg font-semibold tracking-[-0.01em] text-ink">
@@ -407,7 +408,7 @@ export default function Dashboard() {
             </div>
 
             {isLoading && devices.length === 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+              <div className="grid gap-3 @[30rem]:grid-cols-2 @[52rem]:grid-cols-3">
                 {[...Array(6)].map((_, i) => (
                   <div key={i} className="space-y-3 rounded-xl border border-hairline bg-panel p-4">
                     <div className="flex gap-3">
