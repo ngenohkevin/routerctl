@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -15,10 +15,13 @@ import {
   Power,
   LogOut,
   MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { isRailCollapsed, setRailCollapsed, subscribeRail } from '@/lib/rail';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RebootDialog } from '@/components/reboot-dialog';
@@ -87,7 +90,7 @@ function useHealth() {
   return health;
 }
 
-function ConnectionLight({ health, compact = false }: { health: HealthStatus | null; compact?: boolean }) {
+function ConnectionLight({ health, textClassName }: { health: HealthStatus | null; textClassName?: string }) {
   const ok = health?.status === 'healthy' && health.routerConnected;
   const degraded = health?.status === 'degraded' || (health?.status === 'healthy' && !health.routerConnected);
   const tone = !health ? 'off' : ok ? 'link' : degraded ? 'amber' : 'fault';
@@ -101,7 +104,7 @@ function ConnectionLight({ health, compact = false }: { health: HealthStatus | n
   return (
     <span className="flex min-w-0 items-center gap-2 text-xs text-ink-3" title={text}>
       <Led tone={tone} live={ok} label={text} />
-      {!compact && <span className="truncate">{text}</span>}
+      <span className={cn('truncate', textClassName)}>{text}</span>
     </span>
   );
 }
@@ -118,8 +121,9 @@ async function reboot() {
 
 /**
  * The app frame. Desktop: a 232px rail (navigation serves content) with the
- * connection light and the two dangerous actions pinned to its foot. Phone:
- * a slim top bar and a bottom tab bar within thumb reach, the PWA's home.
+ * connection light and the two dangerous actions pinned to its foot; it folds
+ * to a 64px icon strip, remembered per device. Phone: a slim top bar and a
+ * bottom tab bar within thumb reach, the PWA's home.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -127,15 +131,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const routerDown = !health?.routerConnected;
   const current = NAV.find((n) => isActive(pathname, n.href));
+  // Layout follows <html data-rail> in CSS; this copy only drives labels and tooltips.
+  const collapsed = useSyncExternalStore(subscribeRail, isRailCollapsed, () => false);
+  const railToggle = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
 
   return (
     <div className="min-h-dvh bg-canvas">
       {/* Desktop rail */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-hairline bg-canvas lg:flex">
-        <Link href="/" className="flex h-16 items-center gap-2.5 px-5 text-ink">
-          <Mark className="size-7 text-ink-2" />
-          <span className="text-[15px] font-semibold tracking-[-0.01em]">RouterCtl</span>
-        </Link>
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col border-r border-hairline bg-canvas lg:flex rail-collapsed:w-16">
+        <div className="flex h-16 items-center gap-1 px-3">
+          <Link href="/" className="flex h-10 min-w-0 flex-1 items-center gap-2.5 px-2 text-ink rail-collapsed:hidden">
+            <Mark className="size-7 shrink-0 text-ink-2" />
+            <span className="text-[15px] font-semibold tracking-[-0.01em]">RouterCtl</span>
+          </Link>
+          <button
+            type="button"
+            onClick={() => setRailCollapsed(!collapsed)}
+            aria-label={railToggle}
+            title={railToggle}
+            className="flex size-10 shrink-0 items-center justify-center rounded-md text-ink-4 transition-colors duration-150 hover:bg-panel hover:text-ink-2"
+          >
+            <PanelLeftClose className="size-4 rail-collapsed:hidden" />
+            <PanelLeftOpen className="hidden size-4 rail-collapsed:block" />
+          </button>
+        </div>
         <nav className="flex-1 space-y-0.5 px-3 py-2" aria-label="Main">
           {NAV.map((item) => {
             const active = isActive(pathname, item.href);
@@ -144,6 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
+                title={collapsed ? item.label : undefined}
                 className={cn(
                   'group relative flex h-9 items-center gap-3 rounded-md px-3 text-sm transition-colors duration-150',
                   active ? 'bg-raised font-medium text-ink' : 'text-ink-3 hover:bg-panel hover:text-ink-2'
@@ -151,14 +171,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-link" aria-hidden />}
                 <item.icon className="size-4 shrink-0" />
-                {item.label}
+                <span className="rail-collapsed:sr-only">{item.label}</span>
               </Link>
             );
           })}
         </nav>
         <div className="space-y-1 border-t border-hairline px-3 py-3">
-          <div className="px-3 py-2">
-            <ConnectionLight health={health} />
+          <div className="px-3 py-2 rail-collapsed:flex rail-collapsed:justify-center rail-collapsed:px-0">
+            <ConnectionLight health={health} textClassName="rail-collapsed:hidden" />
           </div>
           <RebootDialog
             onReboot={reboot}
@@ -167,20 +187,22 @@ export function AppShell({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 disabled={routerDown}
+                title={collapsed ? 'Reboot router' : undefined}
                 className="flex h-9 w-full items-center gap-3 rounded-md px-3 text-sm text-ink-3 transition-colors hover:bg-panel hover:text-fault disabled:pointer-events-none disabled:opacity-40"
               >
-                <Power className="size-4" />
-                Reboot router
+                <Power className="size-4 shrink-0" />
+                <span className="rail-collapsed:sr-only">Reboot router</span>
               </button>
             }
           />
           <button
             type="button"
             onClick={() => api.logout()}
+            title={collapsed ? 'Sign out' : undefined}
             className="flex h-9 w-full items-center gap-3 rounded-md px-3 text-sm text-ink-3 transition-colors hover:bg-panel hover:text-ink-2"
           >
-            <LogOut className="size-4" />
-            Sign out
+            <LogOut className="size-4 shrink-0" />
+            <span className="rail-collapsed:sr-only">Sign out</span>
           </button>
         </div>
       </aside>
@@ -196,7 +218,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <ConnectionLight health={health} />
       </header>
 
-      <main className="pb-28 lg:pb-12 lg:pl-[232px]">
+      <main className="pb-28 lg:pb-12 lg:pl-[232px] lg:rail-collapsed:pl-16">
         <div className="mx-auto w-full max-w-[1360px] px-4 pt-5 md:px-6 md:pt-7 lg:px-10 lg:pt-9">{children}</div>
       </main>
 

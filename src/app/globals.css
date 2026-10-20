@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+/* The desktop rail folded to icons: <html data-rail="collapsed">, set before first paint (src/lib/rail.ts). */
+@custom-variant rail-collapsed (&:where([data-rail="collapsed"] *));
 
 /*
  * RouterCtl — a quiet instrument panel for the house network.
