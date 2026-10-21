@@ -7,8 +7,9 @@ import { Switch } from '@/components/ui/switch';
 import { Panel } from '@/components/shell/panel';
 import { Led } from '@/components/shell/led';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { clock } from '@/lib/power';
-import { homePowerHeadline, homePowerPanelTone, homePowerTone, tvLine } from '@/lib/home-power';
+import { deltaLine, deltaOnBattery, homePowerHeadline, homePowerPanelTone, homePowerTone, tvLine } from '@/lib/home-power';
 import { useNow } from '@/lib/use-now';
 import { usePowerStore } from '@/stores/power';
 import { TOUCH } from './touch';
@@ -54,6 +55,16 @@ export function PowerStatusPanel({
         <h2 className="text-[18px] font-semibold leading-6 text-ink">{headline}</h2>
       </div>
       {failed && <p className="text-sm text-ink-2">The dashboard can’t reach the agent on the Pi.</p>}
+      {!failed && s?.delta && (
+        <p className={cn('num font-mono text-xs', s.delta.available ? 'text-ink-2' : 'text-ink-3')}>
+          Delta · {deltaLine(s.delta) ?? `no reading over USB${s.delta.error ? ` (${s.delta.error})` : ''}`}
+        </p>
+      )}
+      {!failed && s && !s.cut && !s.test && deltaOnBattery(s.delta) && (
+        <p className="text-sm text-ink-2">
+          The Delta reports it’s on battery, but the Mains plug still has power, so the Pi hasn’t confirmed a power cut.
+        </p>
+      )}
       {!failed && s?.reason && <p className="text-sm text-ink-2">{s.reason}</p>}
 
       {cut && (

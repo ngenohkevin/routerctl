@@ -139,8 +139,10 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
             <AlertDialogTitle>Switch Mains off for {minutes} minutes?</AlertDialogTitle>
             <AlertDialogDescription>
               The Delta will run on battery and TV Group switches off after {quick ? 2 : s?.settings.cutoffMinutes ?? 20} minutes.
-              The Pi can’t see the Delta’s battery yet, so check it’s well charged first. Mains comes back on by itself when the
-              test ends, or when you press Stop.
+              {s?.delta?.available && s.delta.charge != null
+                ? `The Delta is at ${s.delta.charge}%.`
+                : 'The Pi can’t read the Delta’s battery right now, so check it’s well charged first.'}{' '}
+              Mains comes back on by itself when the test ends, or when you press Stop.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

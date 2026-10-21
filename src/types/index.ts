@@ -699,8 +699,20 @@ export interface PowerStatus {
   alertsConfigured: boolean;
   test: PowerTest | null;
   lastCut: PowerCut | null;
-  delta: null;
+  delta: PowerDelta | null;
   updatedAt: string | null;
+}
+
+/** The Delta's own reading over its USB-C port. Without `available` there are no numbers, only `error`. */
+export interface PowerDelta {
+  available: boolean;
+  state?: 'on_mains' | 'charging' | 'on_battery';
+  lowBattery?: boolean;
+  charge?: number;
+  /** On battery only. */
+  runtimeSec?: number;
+  error?: string;
+  readAt?: string;
 }
 
 export interface PowerEvent {

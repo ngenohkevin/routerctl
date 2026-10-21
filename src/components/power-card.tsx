@@ -7,7 +7,7 @@ import { Panel, PanelHeader } from '@/components/shell/panel';
 import { Led } from '@/components/shell/led';
 import { useUps } from '@/stores/ups';
 import { usePower, powerMode } from '@/stores/power';
-import { homePowerHeadline, homePowerPanelTone, homePowerTone, tvLine } from '@/lib/home-power';
+import { deltaLine, homePowerHeadline, homePowerPanelTone, homePowerTone, tvLine } from '@/lib/home-power';
 import { alertText, dayClock, formatDuration, powerHeadline, powerPanelTone, powerTone } from '@/lib/power';
 
 /** Power at a glance, in the Overview side column. Tapping opens the Power page. */
@@ -26,6 +26,7 @@ function PlugsPowerCard() {
       ? `TV group ${tv.on === null ? 'not answering' : tv.on ? 'on' : 'off'}`
       : null;
   const problem = (s?.problems ?? [])[0];
+  const delta = deltaLine(s?.delta);
   return (
     <Link
       href="/power"
@@ -38,7 +39,8 @@ function PlugsPowerCard() {
           <Led tone={homePowerTone(s, failed)} label={headline} />
           <span className={cn('text-sm font-medium', s && !failed ? 'text-ink' : 'text-ink-3')}>{headline}</span>
         </div>
-        {detail && <p className="num mt-1.5 pl-4 font-mono text-xs text-ink-2">{detail}</p>}
+        {delta && <p className="num mt-1.5 pl-4 font-mono text-xs text-ink-2">Delta · {delta}</p>}
+        {detail && <p className={cn('num pl-4 font-mono text-xs text-ink-2', delta ? 'mt-1' : 'mt-1.5')}>{detail}</p>}
         {problem && <p className="mt-1 pl-4 text-xs text-amber">{problem.text}</p>}
       </Panel>
     </Link>

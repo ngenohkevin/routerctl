@@ -1,5 +1,5 @@
 import type { LedTone } from '@/components/shell/led';
-import type { PowerCut, PowerCutView, PowerEvent, PowerStatus } from '@/types';
+import type { PowerCut, PowerCutView, PowerDelta, PowerEvent, PowerStatus } from '@/types';
 import { clock, formatDuration, secondsSince } from '@/lib/power';
 
 /** Problems that stop the switch-off or the detection from working. */
@@ -13,8 +13,8 @@ export function minutesLeft(iso: string, now: number = Date.now()): number {
 export function homePowerTone(s: PowerStatus | null, failed: boolean): LedTone {
   if (failed || !s) return 'off';
   const problems = s.problems ?? [];
-  if (problems.some((p) => BLOCKING.has(p.code))) return 'fault';
-  if (s.cut || s.test || problems.length > 0) return 'amber';
+  if (problems.some((p) => BLOCKING.has(p.code)) || deltaOnBattery(s.delta, true)) return 'fault';
+  if (s.cut || s.test || problems.length > 0 || deltaOnBattery(s.delta)) return 'amber';
   if (s.mains === 'unknown') return 'off';
   return 'link';
 }
@@ -28,8 +28,9 @@ export function homePowerPanelTone(s: PowerStatus | null, failed: boolean): 'amb
 export function homePowerHeadline(s: PowerStatus | null, failed: boolean, now: number = Date.now()): string {
   if (failed) return 'No data from the agent';
   if (!s) return 'Checking the power…';
-  if (s.cut && !s.cut.test) return `Power cut for ${formatDuration(secondsSince(s.cut.start, now))}`;
+  if (s.cut && !s.cut.test) return `On battery · power cut for ${formatDuration(secondsSince(s.cut.start, now))}`;
   if (s.test) return `Test cut until ${clock(s.test.ends)}`;
+  if (deltaOnBattery(s.delta)) return 'On battery';
   if (s.mains === 'unknown') return s.reason ?? 'Can’t tell: the plugs aren’t answering';
   return 'Mains on';
 }
@@ -50,8 +51,37 @@ export function tvLine(cut: PowerCutView, now: number = Date.now()): string {
 
 /** The Overview headline's note during a real cut (like batteryNote for the UPS). */
 export function homePowerNote(s: PowerStatus | null, now: number = Date.now()): string | null {
-  if (!s?.cut || s.cut.test) return null;
-  return `Power cut for ${formatDuration(secondsSince(s.cut.start, now))}. ${tvLine(s.cut, now)}.`;
+  if (!s || s.test) return null;
+  const level = deltaLevel(s.delta);
+  if (s.cut && !s.cut.test) {
+    return `On battery: power cut for ${formatDuration(secondsSince(s.cut.start, now))}.${level ? ` Delta ${level}.` : ''} ${tvLine(s.cut, now)}.`;
+  }
+  if (deltaOnBattery(s.delta)) return `The Delta is on battery${level ? ` (${level})` : ''}. The Pi hasn’t confirmed a power cut.`;
+  return null;
+}
+
+/** On battery by the Delta's own reading; `low` also needs its low-battery flag. */
+export function deltaOnBattery(d: PowerDelta | null | undefined, low = false): boolean {
+  return !!d?.available && d.state === 'on_battery' && (!low || !!d.lowBattery);
+}
+
+/** "97%, about 5 h 20 m left" on battery, "97%" otherwise; null without a reading. */
+function deltaLevel(d: PowerDelta | null | undefined): string | null {
+  if (!d?.available || d.charge == null) return null;
+  return d.state === 'on_battery' && d.runtimeSec != null ? `${d.charge}%, about ${formatDuration(d.runtimeSec)} left` : `${d.charge}%`;
+}
+
+/** The Delta in one line: "On battery · 97% · about 5 h 20 m left", "On mains · charging 87%", "On mains · 100%". */
+export function deltaLine(d: PowerDelta | null | undefined): string | null {
+  if (!d?.available) return null;
+  const pct = d.charge != null ? `${d.charge}%` : null;
+  const parts =
+    d.state === 'on_battery'
+      ? ['On battery', pct, d.runtimeSec != null ? `about ${formatDuration(d.runtimeSec)} left` : null, d.lowBattery ? 'battery low' : null]
+      : d.state === 'charging'
+        ? ['On mains', pct ? `charging ${pct}` : 'charging']
+        : ['On mains', pct];
+  return parts.filter(Boolean).join(' · ');
 }
 
 export const extensionLabel: Record<string, string> = {
