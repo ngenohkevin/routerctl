@@ -1,6 +1,6 @@
 import type { LedTone } from '@/components/shell/led';
 import type { PowerCut, PowerCutView, PowerDelta, PowerEvent, PowerStatus } from '@/types';
-import { clock, formatDuration, secondsSince } from '@/lib/power';
+import { clock, dayClock, formatDuration, secondsSince } from '@/lib/power';
 
 /** Problems that stop the switch-off or the detection from working. */
 const BLOCKING = new Set(['tv_unreachable', 'plugs_blind', 'auth_rejected', 'mains_stuck_off']);
@@ -85,7 +85,7 @@ function deltaLevel(d: PowerDelta | null | undefined): string | null {
   return d.state === 'on_battery' && d.runtimeSec != null ? `${d.charge}%, about ${formatDuration(d.runtimeSec)} left` : `${d.charge}%`;
 }
 
-/** The Delta in one line: "On battery · 97% · about 5 h 20 m left", "On mains · charging 87%", "On mains · 100%". */
+/** The Delta in one line: "On battery · 97% · about 5 h 20 m left", "On mains · charging 87% · full in about 25 min", "On mains · 100%". */
 export function deltaLine(d: PowerDelta | null | undefined): string | null {
   if (!d?.available) return null;
   const pct = d.charge != null ? `${d.charge}%` : null;
@@ -93,9 +93,41 @@ export function deltaLine(d: PowerDelta | null | undefined): string | null {
     d.state === 'on_battery'
       ? ['On battery', pct, d.runtimeSec != null ? `about ${formatDuration(d.runtimeSec)} left` : null, d.lowBattery ? 'battery low' : null]
       : d.state === 'charging'
-        ? ['On mains', pct ? `charging ${pct}` : 'charging']
+        ? ['On mains', pct ? `charging ${pct}` : 'charging', d.fullInSec != null ? `full in about ${formatDuration(d.fullInSec)}` : null]
         : ['On mains', pct];
   return parts.filter(Boolean).join(' · ');
+}
+
+/**
+ * How long the network alone lasts, from what the Pi learned in power cuts:
+ * after the switch-off during a countdown, if the TV group went off now when
+ * it stays on until power returns, from the current charge otherwise. Null
+ * with nothing to say (no Delta, or the TV group already off in a cut, where
+ * the Delta's own estimate is the network alone).
+ */
+export function runtimeLine(s: PowerStatus | null, now: number = Date.now()): string | null {
+  const r = s?.runtime;
+  if (!s || !r) return null;
+  const cut = s.cut;
+  if (cut) {
+    if (cut.mode === 'countdown' && r.afterSwitchOffSec != null && cut.switchOffAt) {
+      const end = new Date(cut.switchOffAt).getTime() + r.afterSwitchOffSec * 1000;
+      const pct = r.chargeAtSwitchOff != null ? ` from about ${r.chargeAtSwitchOff}%` : '';
+      return `After the switch-off the network alone lasts about ${formatDuration(r.afterSwitchOffSec)}${pct}, until about ${dayClock(new Date(end).toISOString(), new Date(now))}.`;
+    }
+    if (cut.mode === 'until_power' && r.networkNowSec != null) {
+      return `With the TV group off, the network alone would last about ${formatDuration(r.networkNowSec)}.`;
+    }
+    return null;
+  }
+  if (r.networkFullSec == null) {
+    return 'The Pi learns how long the network alone lasts in the first power cut with the TV group off.';
+  }
+  const charge = s.delta?.available ? s.delta.charge : undefined;
+  if (charge != null && charge < 99 && r.networkNowSec != null) {
+    return `In a long power cut the network alone would last about ${formatDuration(r.networkNowSec)} at ${charge}% (${formatDuration(r.networkFullSec)} on a full battery).`;
+  }
+  return `In a long power cut the network alone would last about ${formatDuration(r.networkFullSec)} on a full battery.`;
 }
 
 export const extensionLabel: Record<string, string> = {
@@ -116,7 +148,12 @@ export function cutDetail(c: PowerCut): string[] {
   const out: string[] = [];
   if (c.cause === 'supply') out.push('The house had power, but the Delta wasn’t getting it: the power guard, or the Delta’s charging cable.');
   if (c.cause === 'mains_off') out.push('The Mains plug was switched off.');
-  if (c.lowestCharge != null) out.push(`Delta down to ${c.lowestCharge}%.`);
+  if (c.startCharge != null && c.lowestCharge != null) {
+    const used = c.startCharge - c.lowestCharge;
+    if (!c.end) out.push(`Delta ${c.startCharge}% → ${c.lowestCharge}% so far.`);
+    else if (used <= 0) out.push(`Delta at ${c.startCharge}%, under 1% used.`);
+    else out.push(`Delta ${c.startCharge}% → ${c.lowestCharge}%, used ${used}%.`);
+  } else if (c.lowestCharge != null) out.push(`Delta down to ${c.lowestCharge}%.`);
   if (c.startApprox) out.push('Start is approximate: it began while the Pi couldn’t see the plugs.');
   if (c.tvOffAtStart) out.push('TV group was already off.');
   for (const e of c.extensions ?? []) out.push(`${clock(e.at)}: ${extensionLabel[e.kind] ?? e.kind}.`);

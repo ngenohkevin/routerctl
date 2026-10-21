@@ -692,6 +692,8 @@ export interface PowerCut {
   cause?: PowerCause;
   /** The Delta's lowest % during the cut. */
   lowestCharge?: number;
+  /** The Delta's % at the cut's first reading (its start, unless the Delta couldn't be read then). */
+  startCharge?: number;
 }
 
 export interface PowerStatus {
@@ -709,7 +711,21 @@ export interface PowerStatus {
   delta: PowerDelta | null;
   /** The Delta is on battery only because Mains just turned on: the power guard waits ~40 s before passing power. */
   guardWaiting?: boolean;
+  /** What the Pi has learned about how long the network alone lasts; null without a Delta (older agents omit it). */
+  runtime?: PowerRuntime | null;
   updatedAt: string | null;
+}
+
+/** Learned in power cuts from the Delta's own estimate while the TV group was off. */
+export interface PowerRuntime {
+  /** The network alone on a full Delta; null until learned. */
+  networkFullSec: number | null;
+  learnedMinutes: number;
+  /** The network alone from the current charge. */
+  networkNowSec: number | null;
+  /** During the countdown on battery: how long the network alone lasts after the TV group switches off, and the % left then. */
+  afterSwitchOffSec: number | null;
+  chargeAtSwitchOff: number | null;
 }
 
 /** The Delta's own reading over its USB-C port. Without `available` there are no numbers, only `error`. */
@@ -720,6 +736,8 @@ export interface PowerDelta {
   charge?: number;
   /** On battery only. */
   runtimeSec?: number;
+  /** Charging only: about this long to 100%. */
+  fullInSec?: number;
   error?: string;
   readAt?: string;
 }
@@ -736,6 +754,10 @@ export interface PowerPoint {
   t: string;
   mains: PowerVerdict;
   tvOn: boolean | null;
+  /** The Delta's last reading in the minute. */
+  charge?: number;
+  /** The Delta ran on battery at some point in the minute. */
+  onBattery?: boolean;
 }
 
 export interface PowerHistory {

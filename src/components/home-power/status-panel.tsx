@@ -9,7 +9,7 @@ import { Led } from '@/components/shell/led';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { clock } from '@/lib/power';
-import { deltaLine, deltaOnBattery, homePowerHeadline, homePowerPanelTone, homePowerTone, tvLine } from '@/lib/home-power';
+import { deltaLine, deltaOnBattery, homePowerHeadline, homePowerPanelTone, homePowerTone, runtimeLine, tvLine } from '@/lib/home-power';
 import { useNow } from '@/lib/use-now';
 import { usePowerStore } from '@/stores/power';
 import { TOUCH } from './touch';
@@ -46,6 +46,7 @@ export function PowerStatusPanel({
 
   const headline = loaded ? homePowerHeadline(s, failed, now) : 'Checking the power…';
   const cut = s?.cut ?? null;
+  const runtime = failed ? null : runtimeLine(s, now);
   const tv = (s?.plugs ?? []).find((p) => p.role === 'tv');
 
   return (
@@ -69,6 +70,7 @@ export function PowerStatusPanel({
               : 'Power cuts are detected by the plugs while the Delta can’t be read; a power-guard cut would go unnoticed.'}
         </p>
       )}
+      {runtime && !cut && <p className="text-xs text-ink-3">{runtime}</p>}
       {!failed && s && !s.cut && !s.test && s.guardWaiting && (
         <p className="text-sm text-ink-2">
           Power is back. The power guard waits about 40 seconds for a steady voltage before passing it to the Delta.
@@ -92,6 +94,7 @@ export function PowerStatusPanel({
             {tvLine(cut, now)}
             {cut.mainsBackSince ? ` · power back since ${clock(cut.mainsBackSince)}, confirming (15 s)` : ''}
           </p>
+          {runtime && <p className="num text-sm text-ink-2">{runtime}</p>}
           <div className="flex flex-wrap gap-2">
             {cut.mode === 'off' ? (
               <Button
