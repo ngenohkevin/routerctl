@@ -35,6 +35,7 @@ export function homePowerHeadline(s: PowerStatus | null, failed: boolean, now: n
     return `On battery · power cut for ${d}`;
   }
   if (s.test) return `Test cut until ${clock(s.test.ends)}`;
+  if (s.guardWaiting) return 'Power back · the guard is reconnecting';
   if (deltaOnBattery(s.delta)) return 'On battery';
   if (s.mains === 'unknown') return s.reason ?? 'Can’t tell: the plugs aren’t answering';
   return 'Mains on';
@@ -68,6 +69,7 @@ export function homePowerNote(s: PowerStatus | null, now: number = Date.now()): 
           : `On battery: power cut for ${d}.`;
     return `${what}${level ? ` Delta ${level}.` : ''} ${tvLine(s.cut, now)}.`;
   }
+  if (s.guardWaiting) return 'Power is back. The power guard waits about 40 seconds for a steady voltage before passing it to the Delta.';
   if (deltaOnBattery(s.delta)) return `The Delta is on battery${level ? ` (${level})` : ''}. The Pi confirms a power cut after 15 seconds.`;
   return null;
 }

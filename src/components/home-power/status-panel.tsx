@@ -69,7 +69,12 @@ export function PowerStatusPanel({
               : 'Power cuts are detected by the plugs while the Delta can’t be read; a power-guard cut would go unnoticed.'}
         </p>
       )}
-      {!failed && s && !s.cut && !s.test && deltaOnBattery(s.delta) && (
+      {!failed && s && !s.cut && !s.test && s.guardWaiting && (
+        <p className="text-sm text-ink-2">
+          Power is back. The power guard waits about 40 seconds for a steady voltage before passing it to the Delta.
+        </p>
+      )}
+      {!failed && s && !s.cut && !s.test && !s.guardWaiting && deltaOnBattery(s.delta) && (
         <p className="text-sm text-ink-2">
           The Delta is on battery. The Pi confirms a power cut after 15 seconds.
         </p>

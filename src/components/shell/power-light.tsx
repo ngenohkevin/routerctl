@@ -13,6 +13,7 @@ export function powerLightText(s: PowerStatus | null, failed: boolean): string {
   const d = s.delta?.available ? s.delta : null;
   const pct = d?.charge != null ? ` · ${d.charge}%` : '';
   if (s.test) return `Test cut${pct}`;
+  if (s.guardWaiting) return `Power back · reconnecting${pct}`;
   if ((s.cut && !s.cut.test) || d?.state === 'on_battery') return `On battery${pct}`;
   if (!d && s.mains === 'unknown') return 'Power: can’t tell';
   if (d?.state === 'charging') return `Charging${pct}`;

@@ -707,6 +707,8 @@ export interface PowerStatus {
   test: PowerTest | null;
   lastCut: PowerCut | null;
   delta: PowerDelta | null;
+  /** The Delta is on battery only because Mains just turned on: the power guard waits ~40 s before passing power. */
+  guardWaiting?: boolean;
   updatedAt: string | null;
 }
 
