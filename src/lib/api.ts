@@ -90,6 +90,14 @@ export function isAuthenticated(): boolean {
   return true;
 }
 
+/**
+ * Older agents send "lines": null until both lines have been measured (after
+ * a restart with one line down), and the Overview reads lines.length.
+ */
+function withLines(s: WANFailoverStatus): WANFailoverStatus {
+  return { ...s, lines: s.lines ?? [] };
+}
+
 async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -692,7 +700,7 @@ export const api = {
   },
 
   async getWanFailover(): Promise<WANFailoverStatus> {
-    return fetchApi<WANFailoverStatus>('/wan/failover');
+    return withLines(await fetchApi<WANFailoverStatus>('/wan/failover'));
   },
 
   async setWanBalance(enabled: boolean): Promise<unknown> {
@@ -700,10 +708,12 @@ export const api = {
   },
 
   async setWanFailover(req: { mode: 'auto' | 'manual' }): Promise<WANFailoverStatus> {
-    return fetchApi<WANFailoverStatus>('/wan/failover', {
-      method: 'POST',
-      body: JSON.stringify(req),
-    });
+    return withLines(
+      await fetchApi<WANFailoverStatus>('/wan/failover', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      }),
+    );
   },
 
   async getCdnSteering(): Promise<CDNSteering> {
