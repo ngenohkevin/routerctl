@@ -30,7 +30,7 @@ export function homePowerHeadline(s: PowerStatus | null, failed: boolean, now: n
   if (!s) return 'Checking the power…';
   if (s.cut && !s.cut.test) {
     const d = formatDuration(secondsSince(s.cut.start, now));
-    if (s.cut.cause === 'supply') return `On battery · no supply for ${d} (wall power is on)`;
+    if (s.cut.cause === 'supply') return `On battery for ${d} · the Delta isn’t getting power`;
     if (s.cut.cause === 'mains_off') return `On battery · the Mains plug was switched off`;
     return `On battery · power cut for ${d}`;
   }
@@ -62,7 +62,7 @@ export function homePowerNote(s: PowerStatus | null, now: number = Date.now()): 
     const d = formatDuration(secondsSince(s.cut.start, now));
     const what =
       s.cut.cause === 'supply'
-        ? `On battery: no supply for ${d}, but wall power is on (power guard or the Delta’s charging cable).`
+        ? `On battery for ${d}. The house has power, but the Delta isn’t getting it: check the power guard and the Delta’s charging cable.`
         : s.cut.cause === 'mains_off'
           ? `On battery: the Mains plug was switched off ${d} ago; the Pi switches it back on.`
           : `On battery: power cut for ${d}.`;
@@ -112,7 +112,7 @@ export function signalText(rssi: number): string {
 /** The detail lines under a cut in the list. */
 export function cutDetail(c: PowerCut): string[] {
   const out: string[] = [];
-  if (c.cause === 'supply') out.push('The Delta had no supply while wall power was on: the power guard, or the Delta’s charging cable.');
+  if (c.cause === 'supply') out.push('The house had power, but the Delta wasn’t getting it: the power guard, or the Delta’s charging cable.');
   if (c.cause === 'mains_off') out.push('The Mains plug was switched off.');
   if (c.lowestCharge != null) out.push(`Delta down to ${c.lowestCharge}%.`);
   if (c.startApprox) out.push('Start is approximate: it began while the Pi couldn’t see the plugs.');

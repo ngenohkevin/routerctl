@@ -75,12 +75,17 @@ export function PowerStatusPanel({
         </p>
       )}
       {!failed && s?.reason && <p className="text-sm text-ink-2">{s.reason}</p>}
+      {!failed && cut && !cut.test && cut.cause === 'supply' && (
+        <p className="text-sm text-ink-2">
+          The house has power, but the Delta isn’t getting it. Check the power guard’s lights and the Delta’s charging cable.
+        </p>
+      )}
 
       {cut && (
         <div className="space-y-2.5">
           <p className="num text-sm text-ink">
             {tvLine(cut, now)}
-            {cut.mainsBackSince ? ` · mains back since ${clock(cut.mainsBackSince)}, waiting 2 minutes to be sure` : ''}
+            {cut.mainsBackSince ? ` · power back since ${clock(cut.mainsBackSince)}, confirming (15 s)` : ''}
           </p>
           <div className="flex flex-wrap gap-2">
             {cut.mode === 'off' ? (

@@ -42,7 +42,7 @@ export function HomePowerView() {
     <div className="space-y-6">
       <PageHeader
         title="Power"
-        description="The Delta keeps the network and the TV group running in a power cut. Two Tapo plugs tell the Pi when mains goes, and the TV group switches off when its time is up."
+        description="The Delta keeps the network and the TV group running in a power cut. The Pi reads the Delta over USB to tell when it’s on battery, and switches the TV group off when its time is up."
       />
       <PowerStatusPanel status={s} failed={failed} loaded={loaded} onChanged={changed} />
       <PlugsPanel plugs={s?.plugs ?? []} problems={s?.problems ?? []} inCut={!!s?.cut && !s.cut.test} loading={!loaded} />
