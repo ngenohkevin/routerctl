@@ -31,7 +31,7 @@ export function homePowerHeadline(s: PowerStatus | null, failed: boolean, now: n
   if (s.cut && !s.cut.test) {
     const d = formatDuration(secondsSince(s.cut.start, now));
     if (s.cut.cause === 'supply') return `On battery · no supply for ${d} (wall power is on)`;
-    if (s.cut.cause === 'mains_off') return `On battery · Mains plug switched off ${d} ago`;
+    if (s.cut.cause === 'mains_off') return `On battery · the Mains plug was switched off`;
     return `On battery · power cut for ${d}`;
   }
   if (s.test) return `Test cut until ${clock(s.test.ends)}`;
@@ -64,11 +64,11 @@ export function homePowerNote(s: PowerStatus | null, now: number = Date.now()): 
       s.cut.cause === 'supply'
         ? `On battery: no supply for ${d}, but wall power is on (power guard or the Delta’s charging cable).`
         : s.cut.cause === 'mains_off'
-          ? `On battery: the Mains plug has been off for ${d}.`
+          ? `On battery: the Mains plug was switched off ${d} ago; the Pi switches it back on.`
           : `On battery: power cut for ${d}.`;
     return `${what}${level ? ` Delta ${level}.` : ''} ${tvLine(s.cut, now)}.`;
   }
-  if (deltaOnBattery(s.delta)) return `The Delta is on battery${level ? ` (${level})` : ''}. The Pi hasn’t confirmed a power cut.`;
+  if (deltaOnBattery(s.delta)) return `The Delta is on battery${level ? ` (${level})` : ''}. The Pi confirms a power cut after 15 seconds.`;
   return null;
 }
 
@@ -112,7 +112,7 @@ export function signalText(rssi: number): string {
 /** The detail lines under a cut in the list. */
 export function cutDetail(c: PowerCut): string[] {
   const out: string[] = [];
-  if (c.cause === 'supply') out.push('No supply from the wall socket while wall power was on: the power guard, or the Delta’s charging cable.');
+  if (c.cause === 'supply') out.push('The Delta had no supply while wall power was on: the power guard, or the Delta’s charging cable.');
   if (c.cause === 'mains_off') out.push('The Mains plug was switched off.');
   if (c.lowestCharge != null) out.push(`Delta down to ${c.lowestCharge}%.`);
   if (c.startApprox) out.push('Start is approximate: it began while the Pi couldn’t see the plugs.');

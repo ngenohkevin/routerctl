@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RebootDialog } from '@/components/reboot-dialog';
 import { Led } from '@/components/shell/led';
+import { PowerLight } from '@/components/shell/power-light';
 import type { HealthStatus } from '@/types';
 
 interface NavItem {
@@ -37,15 +38,16 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/', label: 'Overview', icon: LayoutGrid },
   { href: '/devices', label: 'Devices', icon: MonitorSmartphone },
-  { href: '/speed-test', label: 'Speed test', icon: Gauge },
-  { href: '/traffic', label: 'Traffic', icon: Activity },
   { href: '/power', label: 'Power', icon: BatteryCharging },
+  { href: '/traffic', label: 'Traffic', icon: Activity },
+  { href: '/speed-test', label: 'Speed test', icon: Gauge },
   { href: '/dhcp', label: 'DHCP', icon: Network },
   { href: '/logs', label: 'Logs', icon: ScrollText },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-// The phone's tab bar holds the four daily destinations; the rest live under More.
+// The phone's tab bar holds the four daily destinations (Power among them since
+// the Delta: it's what Kevin checks in a cut); the rest live under More.
 const TAB_BAR = NAV.slice(0, 4);
 const MORE = NAV.slice(4);
 
@@ -177,6 +179,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="space-y-1 border-t border-hairline px-3 py-3">
+          <div className="px-3 pt-2 rail-collapsed:flex rail-collapsed:justify-center rail-collapsed:px-0">
+            <PowerLight textClassName="rail-collapsed:hidden" />
+          </div>
           <div className="px-3 py-2 rail-collapsed:flex rail-collapsed:justify-center rail-collapsed:px-0">
             <ConnectionLight health={health} textClassName="rail-collapsed:hidden" />
           </div>
@@ -215,7 +220,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             {current && current.href !== '/' ? current.label : 'RouterCtl'}
           </span>
         </Link>
-        <ConnectionLight health={health} />
+        <div className="flex min-w-0 items-center gap-4">
+          <PowerLight className="h-11" />
+          <ConnectionLight health={health} textClassName="max-sm:hidden" />
+        </div>
       </header>
 
       <main className="pb-28 lg:pb-12 lg:pl-[232px] lg:rail-collapsed:pl-16">

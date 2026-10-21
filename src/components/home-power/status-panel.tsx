@@ -62,14 +62,16 @@ export function PowerStatusPanel({
       )}
       {!failed && s?.delta && (
         <p className="text-xs text-ink-3">
-          {s.delta.available
-            ? 'Power cuts are detected by the Delta.'
-            : 'Power cuts are detected by the plugs while the Delta can’t be read; a power-guard cut would go unnoticed.'}
+          {s.test
+            ? 'During a test the plugs decide: the Delta is meant to be on battery.'
+            : s.delta.available
+              ? 'Power cuts are detected by the Delta.'
+              : 'Power cuts are detected by the plugs while the Delta can’t be read; a power-guard cut would go unnoticed.'}
         </p>
       )}
       {!failed && s && !s.cut && !s.test && deltaOnBattery(s.delta) && (
         <p className="text-sm text-ink-2">
-          The Delta reports it’s on battery, but the Mains plug still has power, so the Pi hasn’t confirmed a power cut.
+          The Delta is on battery. The Pi confirms a power cut after 15 seconds.
         </p>
       )}
       {!failed && s?.reason && <p className="text-sm text-ink-2">{s.reason}</p>}
