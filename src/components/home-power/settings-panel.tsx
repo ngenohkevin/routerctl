@@ -69,7 +69,14 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
     }
   }
 
-  const testBlocked = s?.cut ? 'Not during a power cut.' : s?.test ? 'A test is already running.' : null;
+  const lowCharge = s?.delta?.available && s.delta.charge != null && s.delta.charge < 50 ? s.delta.charge : null;
+  const testBlocked = s?.cut
+    ? 'Not during a power cut.'
+    : s?.test
+      ? 'A test is already running.'
+      : lowCharge != null
+        ? `The Delta is at ${lowCharge}%. Test cuts need at least 50%.`
+        : null;
 
   return (
     <Panel className="space-y-5">

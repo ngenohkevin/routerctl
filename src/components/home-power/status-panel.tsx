@@ -60,6 +60,13 @@ export function PowerStatusPanel({
           Delta · {deltaLine(s.delta) ?? `no reading over USB${s.delta.error ? ` (${s.delta.error})` : ''}`}
         </p>
       )}
+      {!failed && s?.delta && (
+        <p className="text-xs text-ink-3">
+          {s.delta.available
+            ? 'Power cuts are detected by the Delta.'
+            : 'Power cuts are detected by the plugs while the Delta can’t be read; a power-guard cut would go unnoticed.'}
+        </p>
+      )}
       {!failed && s && !s.cut && !s.test && deltaOnBattery(s.delta) && (
         <p className="text-sm text-ink-2">
           The Delta reports it’s on battery, but the Mains plug still has power, so the Pi hasn’t confirmed a power cut.

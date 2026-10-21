@@ -37,6 +37,8 @@ export function CutList({
                 </span>
                 <span className="num text-xs text-ink-2">{c.end ? formatDuration(c.durationSec) : 'going on'}</span>
                 {c.test && <Chip tone="air">Test</Chip>}
+                {!c.test && c.cause === 'supply' && <Chip tone="amber">No supply</Chip>}
+                {!c.test && c.cause === 'mains_off' && <Chip>Mains off</Chip>}
                 {c.source === 'hikvision' && <Chip>Hikvision</Chip>}
                 {c.ranOut && <Chip tone="fault">Battery ran out</Chip>}
               </div>

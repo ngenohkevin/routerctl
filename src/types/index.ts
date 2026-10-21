@@ -631,7 +631,11 @@ export interface PowerCutView {
   cutoffMinutes: number;
   extensions: PowerExtension[] | null;
   mainsBackSince: string | null;
+  cause?: PowerCause;
 }
+
+/** Why the Delta lost its supply: Mains silent (blackout), Mains answering (supply: the guard or its cable), Mains switched off, or Wi-Fi down too. */
+export type PowerCause = 'blackout' | 'supply' | 'mains_off' | 'unknown';
 
 export interface PowerPlug {
   role: 'mains' | 'tv';
@@ -685,6 +689,9 @@ export interface PowerCut {
   source?: 'hikvision';
   lowestBatteryV?: number;
   peakLoad?: number;
+  cause?: PowerCause;
+  /** The Delta's lowest % during the cut. */
+  lowestCharge?: number;
 }
 
 export interface PowerStatus {

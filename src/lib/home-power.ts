@@ -28,7 +28,12 @@ export function homePowerPanelTone(s: PowerStatus | null, failed: boolean): 'amb
 export function homePowerHeadline(s: PowerStatus | null, failed: boolean, now: number = Date.now()): string {
   if (failed) return 'No data from the agent';
   if (!s) return 'Checking the power…';
-  if (s.cut && !s.cut.test) return `On battery · power cut for ${formatDuration(secondsSince(s.cut.start, now))}`;
+  if (s.cut && !s.cut.test) {
+    const d = formatDuration(secondsSince(s.cut.start, now));
+    if (s.cut.cause === 'supply') return `On battery · no supply for ${d} (wall power is on)`;
+    if (s.cut.cause === 'mains_off') return `On battery · Mains plug switched off ${d} ago`;
+    return `On battery · power cut for ${d}`;
+  }
   if (s.test) return `Test cut until ${clock(s.test.ends)}`;
   if (deltaOnBattery(s.delta)) return 'On battery';
   if (s.mains === 'unknown') return s.reason ?? 'Can’t tell: the plugs aren’t answering';
@@ -54,7 +59,14 @@ export function homePowerNote(s: PowerStatus | null, now: number = Date.now()): 
   if (!s || s.test) return null;
   const level = deltaLevel(s.delta);
   if (s.cut && !s.cut.test) {
-    return `On battery: power cut for ${formatDuration(secondsSince(s.cut.start, now))}.${level ? ` Delta ${level}.` : ''} ${tvLine(s.cut, now)}.`;
+    const d = formatDuration(secondsSince(s.cut.start, now));
+    const what =
+      s.cut.cause === 'supply'
+        ? `On battery: no supply for ${d}, but wall power is on (power guard or the Delta’s charging cable).`
+        : s.cut.cause === 'mains_off'
+          ? `On battery: the Mains plug has been off for ${d}.`
+          : `On battery: power cut for ${d}.`;
+    return `${what}${level ? ` Delta ${level}.` : ''} ${tvLine(s.cut, now)}.`;
   }
   if (deltaOnBattery(s.delta)) return `The Delta is on battery${level ? ` (${level})` : ''}. The Pi hasn’t confirmed a power cut.`;
   return null;
@@ -100,6 +112,9 @@ export function signalText(rssi: number): string {
 /** The detail lines under a cut in the list. */
 export function cutDetail(c: PowerCut): string[] {
   const out: string[] = [];
+  if (c.cause === 'supply') out.push('No supply from the wall socket while wall power was on: the power guard, or the Delta’s charging cable.');
+  if (c.cause === 'mains_off') out.push('The Mains plug was switched off.');
+  if (c.lowestCharge != null) out.push(`Delta down to ${c.lowestCharge}%.`);
   if (c.startApprox) out.push('Start is approximate: it began while the Pi couldn’t see the plugs.');
   if (c.tvOffAtStart) out.push('TV group was already off.');
   for (const e of c.extensions ?? []) out.push(`${clock(e.at)}: ${extensionLabel[e.kind] ?? e.kind}.`);
