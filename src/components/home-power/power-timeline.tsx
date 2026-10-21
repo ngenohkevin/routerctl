@@ -132,6 +132,7 @@ function DeltaRow({ points, start }: { points: PowerPoint[]; start: number }) {
                 d={linePath(r.pts)}
                 fill="none"
                 strokeWidth={1.5}
+                strokeLinecap="round"
                 vectorEffect="non-scaling-stroke"
                 className={r.battery ? 'stroke-amber' : 'stroke-link'}
               />

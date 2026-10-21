@@ -98,6 +98,13 @@ export function deltaLine(d: PowerDelta | null | undefined): string | null {
   return parts.filter(Boolean).join(' · ');
 }
 
+/** A learned estimate, rounded to what it can claim: "40 min", "5 h 20 m", "17 h". */
+function roughDuration(sec: number): string {
+  if (sec >= 10 * 3600) return `${Math.round(sec / 3600)} h`;
+  if (sec >= 3600) return formatDuration(Math.round(sec / 600) * 600);
+  return formatDuration(sec);
+}
+
 /**
  * How long the network alone lasts, from what the Pi learned in power cuts:
  * after the switch-off during a countdown, if the TV group went off now when
@@ -112,22 +119,22 @@ export function runtimeLine(s: PowerStatus | null, now: number = Date.now()): st
   if (cut) {
     if (cut.mode === 'countdown' && r.afterSwitchOffSec != null && cut.switchOffAt) {
       const end = new Date(cut.switchOffAt).getTime() + r.afterSwitchOffSec * 1000;
-      const pct = r.chargeAtSwitchOff != null ? ` from about ${r.chargeAtSwitchOff}%` : '';
-      return `After the switch-off the network alone lasts about ${formatDuration(r.afterSwitchOffSec)}${pct}, until about ${dayClock(new Date(end).toISOString(), new Date(now))}.`;
+      const pct = r.chargeAtSwitchOff != null ? ` (Delta about ${r.chargeAtSwitchOff}%)` : '';
+      return `After the switch-off${pct}, the network alone lasts about ${roughDuration(r.afterSwitchOffSec)}, until about ${dayClock(new Date(end).toISOString(), new Date(now))}.`;
     }
     if (cut.mode === 'until_power' && r.networkNowSec != null) {
-      return `With the TV group off, the network alone would last about ${formatDuration(r.networkNowSec)}.`;
+      return `With the TV group off, the network alone would last about ${roughDuration(r.networkNowSec)}.`;
     }
     return null;
   }
   if (r.networkFullSec == null) {
-    return 'The Pi learns how long the network alone lasts in the first power cut with the TV group off.';
+    return 'The Pi learns how long the network alone lasts once a power cut runs a few minutes past the TV group’s switch-off.';
   }
   const charge = s.delta?.available ? s.delta.charge : undefined;
   if (charge != null && charge < 99 && r.networkNowSec != null) {
-    return `In a long power cut the network alone would last about ${formatDuration(r.networkNowSec)} at ${charge}% (${formatDuration(r.networkFullSec)} on a full battery).`;
+    return `In a long power cut the network alone would last about ${roughDuration(r.networkNowSec)} at ${charge}% (${roughDuration(r.networkFullSec)} on a full battery).`;
   }
-  return `In a long power cut the network alone would last about ${formatDuration(r.networkFullSec)} on a full battery.`;
+  return `In a long power cut the network alone would last about ${roughDuration(r.networkFullSec)} on a full battery.`;
 }
 
 export const extensionLabel: Record<string, string> = {
@@ -150,7 +157,7 @@ export function cutDetail(c: PowerCut): string[] {
   if (c.cause === 'mains_off') out.push('The Mains plug was switched off.');
   if (c.startCharge != null && c.lowestCharge != null) {
     const used = c.startCharge - c.lowestCharge;
-    if (!c.end) out.push(`Delta ${c.startCharge}% → ${c.lowestCharge}% so far.`);
+    if (!c.end) out.push(used <= 0 ? `Delta at ${c.startCharge}% so far.` : `Delta ${c.startCharge}% → ${c.lowestCharge}% so far.`);
     else if (used <= 0) out.push(`Delta at ${c.startCharge}%, under 1% used.`);
     else out.push(`Delta ${c.startCharge}% → ${c.lowestCharge}%, used ${used}%.`);
   } else if (c.lowestCharge != null) out.push(`Delta down to ${c.lowestCharge}%.`);
