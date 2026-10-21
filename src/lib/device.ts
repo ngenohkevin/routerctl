@@ -1,4 +1,5 @@
 import {
+  BatteryCharging,
   Gamepad2,
   Laptop,
   Monitor,
@@ -29,6 +30,7 @@ export const DEVICE_TYPES: { value: string; label: string }[] = [
   { value: 'printer', label: 'Printer' },
   { value: 'camera', label: 'Camera' },
   { value: 'smart-home', label: 'Smart home' },
+  { value: 'power', label: 'Power station' },
   { value: 'iot', label: 'Other gadget' },
   { value: 'router', label: 'Network gear' },
 ];
@@ -105,6 +107,8 @@ export function glyphFor(d: Device): LucideIcon {
     case 'smart-home':
     case 'iot':
       return Lightbulb;
+    case 'power':
+      return BatteryCharging;
     case 'router':
       return RouterIcon;
   }
