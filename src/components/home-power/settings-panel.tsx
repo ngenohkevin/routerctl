@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Panel, PanelHeader } from '@/components/shell/panel';
 import { api } from '@/lib/api';
+import { limitsProblem } from '@/lib/home-power';
 import { TOUCH } from './touch';
 import { usePowerStore } from '@/stores/power';
 import type { PowerStatus } from '@/types';
@@ -46,7 +47,15 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
     setLoadedFrom(s.updatedAt ?? 'loaded');
   }, [s, loadedFrom]);
 
+  // An agent from before the limits doesn't send them, and would drop them.
+  const limitsKnown = s?.settings.chargeLimit !== undefined;
+
   async function save() {
+    const problem = limitsKnown ? limitsProblem(chargeLimit, dischargeLimit) : null;
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
     setBusy(true);
     try {
       setStatus(
@@ -54,8 +63,7 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
           cutoffMinutes: Number(cutoff),
           quietStart,
           quietEnd,
-          chargeLimit: Number(chargeLimit),
-          dischargeLimit: Number(dischargeLimit),
+          ...(limitsKnown ? { chargeLimit: Number(chargeLimit), dischargeLimit: Number(dischargeLimit) } : {}),
         }),
       );
       toast.success('Settings saved');
@@ -111,27 +119,40 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
         Each cut starts from the cutoff; extensions apply to that cut only. In quiet hours the Pi’s messages arrive silently;
         Kuma’s power-cut alert still sounds.
       </p>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="power-charge-limit">Delta charge limit (%)</Label>
-          <Input id="power-charge-limit" type="number" min={50} max={100} value={chargeLimit} onChange={(e) => setChargeLimit(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="power-discharge-limit">Delta discharge limit (%)</Label>
-          <Input
-            id="power-discharge-limit"
-            type="number"
-            min={0}
-            max={30}
-            value={dischargeLimit}
-            onChange={(e) => setDischargeLimit(e.target.value)}
-          />
-        </div>
-      </div>
-      <p className="text-xs text-ink-3">
-        Set these to match the EcoFlow app: the Delta doesn’t tell the Pi. It stops charging at the charge limit and switches its
-        sockets off, the network included, at the discharge limit, so the times shown count down to it.
-      </p>
+      {limitsKnown ? (
+        <>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="power-charge-limit">Delta charge limit (%)</Label>
+              <Input
+                id="power-charge-limit"
+                type="number"
+                min={50}
+                max={100}
+                value={chargeLimit}
+                onChange={(e) => setChargeLimit(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="power-discharge-limit">Delta discharge limit (%)</Label>
+              <Input
+                id="power-discharge-limit"
+                type="number"
+                min={0}
+                max={30}
+                value={dischargeLimit}
+                onChange={(e) => setDischargeLimit(e.target.value)}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-ink-3">
+            Set these to match the EcoFlow app: the Delta doesn’t tell the Pi. It stops charging at the charge limit and switches its
+            sockets off, the network included, at the discharge limit, so the times shown count down to it.
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-ink-3">The Delta’s charge limits can be set here once the agent on the Pi is updated.</p>
+      )}
       <Button size="sm" className={TOUCH} onClick={save} disabled={busy}>
         Save settings
       </Button>

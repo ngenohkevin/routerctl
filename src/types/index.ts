@@ -743,7 +743,7 @@ export interface PowerDelta {
   charge?: number;
   /** On battery only. */
   runtimeSec?: number;
-  /** Charging only: about this long to 100%. */
+  /** Charging only: about this long to the charge limit. */
   fullInSec?: number;
   error?: string;
   readAt?: string;

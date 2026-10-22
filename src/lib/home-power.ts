@@ -84,6 +84,14 @@ export function deltaLimits(s: Partial<PowerSettings> | null | undefined): { cei
   return { ceiling: s?.chargeLimit ?? 100, floor: s?.dischargeLimit ?? 0 };
 }
 
+/** The settings form's limits, or why they can't be saved: whole numbers in the EcoFlow app's ranges. */
+export function limitsProblem(charge: string, discharge: string): string | null {
+  const whole = (v: string, lo: number, hi: number) => /^\d+$/.test(v.trim()) && Number(v) >= lo && Number(v) <= hi;
+  if (!whole(charge, 50, 100)) return 'Enter the Delta’s charge limit: a whole number from 50 to 100.';
+  if (!whole(discharge, 0, 30)) return 'Enter the Delta’s discharge limit: a whole number from 0 to 30.';
+  return null;
+}
+
 /** "about 5 h 20 m left", "… left to 10%" with a discharge limit (the agent counts it to there). */
 function timeLeft(sec: number, floor: number): string {
   return `about ${formatDuration(sec)} left${floor > 0 ? ` to ${floor}%` : ''}`;
@@ -104,7 +112,7 @@ export function deltaLine(d: PowerDelta | null | undefined, settings?: Partial<P
   if (!d?.available) return null;
   const { ceiling, floor } = deltaLimits(settings);
   const pct = d.charge != null ? `${d.charge}%` : null;
-  const target = pct && ceiling < 100 ? ` → ${ceiling}%` : '';
+  const target = d.charge != null && d.charge < ceiling && ceiling < 100 ? ` → ${ceiling}%` : '';
   const charging = `${pct ? `charging ${pct}${target}` : 'charging'}${d.chargeW != null ? ` at ${d.chargeW} W` : ''}`;
   const parts =
     d.state === 'on_battery'
@@ -169,6 +177,9 @@ export function runtimeLine(s: PowerStatus | null, now: number = Date.now()): st
   const limits = [ceiling < 100 ? `charges to ${ceiling}%` : null, floor > 0 ? `switches off at ${floor}%` : null].filter(Boolean);
   const note = limits.length ? ` The Delta ${limits.join(' and ')}.` : '';
   const charge = s.delta?.available ? s.delta.charge : undefined;
+  if (charge != null && (charge <= floor || r.networkNowSec === 0)) {
+    return `At ${charge}% the Delta would switch off straight away in a power cut (${roughDuration(r.networkFullSec)} on a full battery).${note}`;
+  }
   if (charge != null && charge < ceiling - 1 && r.networkNowSec != null) {
     return `In a long power cut the network alone would last about ${roughDuration(r.networkNowSec)} at ${charge}% (${roughDuration(r.networkFullSec)} on a full battery).${note}`;
   }
