@@ -110,9 +110,11 @@ export function tvStateText(s: PowerStatus | null, on: boolean | null): string {
   return s?.tvInUse === true ? 'TV group is on and in use' : s?.tvInUse === false ? 'TV group is on standby' : 'TV group is on';
 }
 
-/** During a countdown with nobody watching: why no 5-minute warning comes. */
-export function warningNote(s: PowerStatus | null): string | null {
-  if (s?.cut?.mode !== 'countdown' || s.tvInUse !== false) return null;
+/** During a countdown with nobody watching, before the warning went: why none comes. */
+export function warningNote(s: PowerStatus | null, now: number = Date.now()): string | null {
+  const cut = s?.cut;
+  if (!cut || cut.mode !== 'countdown' || s.tvInUse !== false || cut.warned) return null;
+  if (!cut.switchOffAt || new Date(cut.switchOffAt).getTime() <= now) return null;
   return 'Nobody’s watching: the TV group is on standby, so the Pi only sends the 5-minute warning if someone starts watching.';
 }
 

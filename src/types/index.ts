@@ -632,6 +632,8 @@ export interface PowerCutView {
   extensions: PowerExtension[] | null;
   mainsBackSince: string | null;
   cause?: PowerCause;
+  /** The 5-minute warning went for this switch-off time (older agents omit it). */
+  warned?: boolean;
 }
 
 /** Why the Delta lost its supply: Mains silent (blackout), Mains answering (supply: the guard or its cable), Mains switched off, or Wi-Fi down too. */

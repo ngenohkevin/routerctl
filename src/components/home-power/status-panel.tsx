@@ -57,7 +57,7 @@ export function PowerStatusPanel({
   const headline = loaded ? homePowerHeadline(s, failed, now) : 'Checking the power…';
   const cut = s?.cut ?? null;
   const runtime = failed ? null : runtimeLine(s, now);
-  const held = failed ? null : warningNote(s);
+  const held = failed ? null : warningNote(s, now);
   const tv = (s?.plugs ?? []).find((p) => p.role === 'tv');
 
   return (
