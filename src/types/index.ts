@@ -713,6 +713,8 @@ export interface PowerStatus {
   guardWaiting?: boolean;
   /** What the Pi has learned about how long the network alone lasts; null without a Delta (older agents omit it). */
   runtime?: PowerRuntime | null;
+  /** With the TV group on: whether anyone's watching, from the Delta's load; null when it can't tell. */
+  tvInUse?: boolean | null;
   updatedAt: string | null;
 }
 
@@ -740,6 +742,18 @@ export interface PowerDelta {
   fullInSec?: number;
   error?: string;
   readAt?: string;
+  // From the Delta's serial port (older agents omit them). Watts are the last minute's average.
+  /** Total output: the load on the Delta (the network, plus the TV group when it's on). */
+  outW?: number;
+  /** Total input; on mains at rest it equals the output (passed through). */
+  inW?: number;
+  /** Charging: input minus output. */
+  chargeW?: number;
+  /** The hottest of the four temperatures it reports, °C. */
+  tempC?: number;
+  firmware?: string;
+  /** The serial port is read but gave nothing for 30 s. */
+  wattsError?: string;
 }
 
 export interface PowerEvent {
@@ -758,6 +772,8 @@ export interface PowerPoint {
   charge?: number;
   /** The Delta ran on battery at some point in the minute. */
   onBattery?: boolean;
+  /** The Delta's load, the minute's average. */
+  outW?: number;
 }
 
 export interface PowerHistory {

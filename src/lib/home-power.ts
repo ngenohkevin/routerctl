@@ -85,17 +85,35 @@ function deltaLevel(d: PowerDelta | null | undefined): string | null {
   return d.state === 'on_battery' && d.runtimeSec != null ? `${d.charge}%, about ${formatDuration(d.runtimeSec)} left` : `${d.charge}%`;
 }
 
-/** The Delta in one line: "On battery · 97% · about 5 h 20 m left", "On mains · charging 87% · full in about 25 min", "On mains · 100%". */
+/**
+ * The Delta in one line: "On battery · 97% · about 5 h 20 m left · load 15 W · 35 °C",
+ * "On mains · charging 87% at 300 W · full in about 25 min · load 21 W", "On mains · 95% · load 21 W".
+ */
 export function deltaLine(d: PowerDelta | null | undefined): string | null {
   if (!d?.available) return null;
   const pct = d.charge != null ? `${d.charge}%` : null;
+  const charging = `${pct ? `charging ${pct}` : 'charging'}${d.chargeW != null ? ` at ${d.chargeW} W` : ''}`;
   const parts =
     d.state === 'on_battery'
       ? ['On battery', pct, d.runtimeSec != null ? `about ${formatDuration(d.runtimeSec)} left` : null, d.lowBattery ? 'battery low' : null]
       : d.state === 'charging'
-        ? ['On mains', pct ? `charging ${pct}` : 'charging', d.fullInSec != null ? `full in about ${formatDuration(d.fullInSec)}` : null]
+        ? ['On mains', charging, d.fullInSec != null ? `full in about ${formatDuration(d.fullInSec)}` : null]
         : ['On mains', pct];
+  parts.push(d.outW != null ? `load ${d.outW} W` : d.wattsError ? 'no watts' : null, d.tempC != null ? `${d.tempC} °C` : null);
   return parts.filter(Boolean).join(' · ');
+}
+
+/** "TV group is on and in use", "TV group is on standby", from the Delta's load; plain "on" when the Pi can't tell. */
+export function tvStateText(s: PowerStatus | null, on: boolean | null): string {
+  if (on === null) return 'TV group is not answering';
+  if (!on) return 'TV group is off';
+  return s?.tvInUse === true ? 'TV group is on and in use' : s?.tvInUse === false ? 'TV group is on standby' : 'TV group is on';
+}
+
+/** During a countdown with nobody watching: why no 5-minute warning comes. */
+export function warningNote(s: PowerStatus | null): string | null {
+  if (s?.cut?.mode !== 'countdown' || s.tvInUse !== false) return null;
+  return 'Nobody’s watching: the TV group is on standby, so the Pi only sends the 5-minute warning if someone starts watching.';
 }
 
 /** A learned estimate, rounded to what it can claim: "40 min", "5 h 20 m", "17 h". */

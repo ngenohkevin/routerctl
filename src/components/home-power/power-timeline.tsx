@@ -58,20 +58,22 @@ interface Run {
 }
 
 /**
- * The battery line as runs of minutes with a reading. A gap of more than 2
- * minutes breaks it; a change between mains and battery starts a new run
- * that joins the last point, so the line stays whole while its colour changes.
+ * A line (y on a 0–100 scale, 0 at the top) as runs of minutes with a
+ * reading. A gap of more than 2 minutes breaks it; a change between mains and
+ * battery starts a new run that joins the last point, so the line stays whole
+ * while its colour changes.
  */
-function chargeRuns(points: PowerPoint[], start: number): Run[] {
+function valueRuns(points: PowerPoint[], start: number, y: (p: PowerPoint) => number | null): Run[] {
   const runs: Run[] = [];
   let prev = -Infinity;
   for (const p of points) {
     const t = new Date(p.t).getTime();
-    if (p.charge == null || t + 60_000 <= start) {
+    const v = y(p);
+    if (v == null || t + 60_000 <= start) {
       prev = -Infinity;
       continue;
     }
-    const pt: [number, number] = [Math.max(0, ((t + 30_000 - start) / DAY) * W), 100 - p.charge];
+    const pt: [number, number] = [Math.max(0, ((t + 30_000 - start) / DAY) * W), v];
     const battery = !!p.onBattery;
     const last = runs[runs.length - 1];
     if (last && t - prev <= 2 * 60_000) {
@@ -106,24 +108,15 @@ function areaPath(pts: [number, number][]): string {
   return `${linePath(p)}L${p[p.length - 1][0].toFixed(1)},100L${p[0][0].toFixed(1)},100Z`;
 }
 
-/** The Delta's % on a 0–100 scale, amber where it ran on battery. */
-function DeltaRow({ points, start }: { points: PowerPoint[]; start: number }) {
-  const seen = points.filter((p) => p.charge != null && new Date(p.t).getTime() + 60_000 > start);
-  if (seen.length === 0) return null;
-  const runs = chargeRuns(points, start);
-  const low = Math.min(...seen.map((p) => p.charge!));
-  const latest = seen[seen.length - 1].charge!;
+/** An area chart row: the runs, amber where the Delta ran on battery. */
+function ChartRow({ label, note, runs, aria }: { label: string; note?: string; runs: Run[]; aria: string }) {
   return (
     <div className="grid grid-cols-[72px_1fr] items-center gap-3">
       <span className="text-xs leading-tight text-ink-2">
-        Delta
-        {low < latest && <span className="num block text-[11px] text-ink-3">low {low}%</span>}
+        {label}
+        {note && <span className="num block text-[11px] text-ink-3">{note}</span>}
       </span>
-      <div
-        className="relative h-12 overflow-hidden rounded-sm bg-raised"
-        role="img"
-        aria-label={`The Delta's charge over the last 24 hours: ${latest}% now, lowest ${low}%`}
-      >
+      <div className="relative h-12 overflow-hidden rounded-sm bg-raised" role="img" aria-label={aria}>
         <svg viewBox={`0 -3 ${W} 106`} preserveAspectRatio="none" className="absolute inset-0 size-full" aria-hidden>
           {runs.map((r) => (
             <g key={`${r.pts[0][0]}-${r.battery}`}>
@@ -144,6 +137,43 @@ function DeltaRow({ points, start }: { points: PowerPoint[]; start: number }) {
   );
 }
 
+function inWindow(points: PowerPoint[], start: number, has: (p: PowerPoint) => boolean): PowerPoint[] {
+  return points.filter((p) => has(p) && new Date(p.t).getTime() + 60_000 > start);
+}
+
+/** The Delta's % on a 0–100 scale. */
+function DeltaRow({ points, start }: { points: PowerPoint[]; start: number }) {
+  const seen = inWindow(points, start, (p) => p.charge != null);
+  if (seen.length === 0) return null;
+  const low = Math.min(...seen.map((p) => p.charge!));
+  const latest = seen[seen.length - 1].charge!;
+  return (
+    <ChartRow
+      label="Delta"
+      note={low < latest ? `low ${low}%` : undefined}
+      runs={valueRuns(points, start, (p) => (p.charge == null ? null : 100 - p.charge))}
+      aria={`The Delta's charge over the last 24 hours: ${latest}% now, lowest ${low}%`}
+    />
+  );
+}
+
+/** The load on the Delta, scaled to the day's peak (at least 60 W, so the network alone sits low). */
+function LoadRow({ points, start }: { points: PowerPoint[]; start: number }) {
+  const seen = inWindow(points, start, (p) => p.outW != null);
+  if (seen.length === 0) return null;
+  const peak = Math.max(...seen.map((p) => p.outW!));
+  const top = Math.max(60, peak);
+  const latest = seen[seen.length - 1].outW!;
+  return (
+    <ChartRow
+      label="Load"
+      note={`peak ${peak} W`}
+      runs={valueRuns(points, start, (p) => (p.outW == null ? null : 100 - (Math.min(p.outW, top) / top) * 100))}
+      aria={`The load on the Delta over the last 24 hours: ${latest} W now, peak ${peak} W`}
+    />
+  );
+}
+
 export function PowerTimeline({ series, loading }: { series: PowerPoint[]; loading: boolean }) {
   const end = useNow(60_000); // the window slides once a minute
   const start = end - DAY;
@@ -158,6 +188,7 @@ export function PowerTimeline({ series, loading }: { series: PowerPoint[]; loadi
           <Row label="Mains" segs={segments(series, (p) => p.mains)} fill={MAINS_FILL} start={start} />
           <Row label="TV group" segs={segments(series, (p) => (p.tvOn === null ? 'none' : p.tvOn ? 'on' : 'off'))} fill={TV_FILL} start={start} />
           <DeltaRow points={series} start={start} />
+          <LoadRow points={series} start={start} />
           <div className="grid grid-cols-[72px_1fr] gap-3">
             <span />
             <div className="num flex justify-between font-mono text-[11px] text-ink-3">
@@ -167,7 +198,8 @@ export function PowerTimeline({ series, loading }: { series: PowerPoint[]; loadi
             </div>
           </div>
           <p className="text-xs text-ink-3">
-            Amber: a power cut, or the Delta running on battery. Grey on the mains row: the Pi couldn’t see the plugs.
+            Amber: a power cut, or the Delta running on battery. Grey on the mains row: the Pi couldn’t see the plugs. Load: what
+            the Delta supplies, the network alone about 20 W, more while the TV is in use.
           </p>
         </div>
       )}

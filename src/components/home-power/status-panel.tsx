@@ -9,7 +9,17 @@ import { Led } from '@/components/shell/led';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { clock } from '@/lib/power';
-import { deltaLine, deltaOnBattery, homePowerHeadline, homePowerPanelTone, homePowerTone, runtimeLine, tvLine } from '@/lib/home-power';
+import {
+  deltaLine,
+  deltaOnBattery,
+  homePowerHeadline,
+  homePowerPanelTone,
+  homePowerTone,
+  runtimeLine,
+  tvLine,
+  tvStateText,
+  warningNote,
+} from '@/lib/home-power';
 import { useNow } from '@/lib/use-now';
 import { usePowerStore } from '@/stores/power';
 import { TOUCH } from './touch';
@@ -47,6 +57,7 @@ export function PowerStatusPanel({
   const headline = loaded ? homePowerHeadline(s, failed, now) : 'Checking the power…';
   const cut = s?.cut ?? null;
   const runtime = failed ? null : runtimeLine(s, now);
+  const held = failed ? null : warningNote(s);
   const tv = (s?.plugs ?? []).find((p) => p.role === 'tv');
 
   return (
@@ -94,6 +105,7 @@ export function PowerStatusPanel({
             {tvLine(cut, now)}
             {cut.mainsBackSince ? ` · power back since ${clock(cut.mainsBackSince)}, confirming (15 s)` : ''}
           </p>
+          {held && <p className="text-sm text-ink-2">{held}</p>}
           {runtime && <p className="num text-sm text-ink-2">{runtime}</p>}
           <div className="flex flex-wrap gap-2">
             {cut.mode === 'off' ? (
@@ -129,9 +141,7 @@ export function PowerStatusPanel({
 
       {!cut && tv && (
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-ink-2">
-            TV group is {tv.on === null ? 'not answering' : tv.on ? 'on' : 'off'}
-          </span>
+          <span className="text-sm text-ink-2">{tvStateText(s, tv.on)}</span>
           <Switch
             checked={!!tv.on}
             disabled={!!busy || tv.on === null}
