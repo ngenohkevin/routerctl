@@ -1,5 +1,5 @@
 import type { LedTone } from '@/components/shell/led';
-import type { PowerCut, PowerCutView, PowerDelta, PowerEvent, PowerStatus } from '@/types';
+import type { PowerCut, PowerCutView, PowerDelta, PowerEvent, PowerSettings, PowerStatus } from '@/types';
 import { clock, dayClock, formatDuration, secondsSince } from '@/lib/power';
 
 /** Problems that stop the switch-off or the detection from working. */
@@ -58,7 +58,7 @@ export function tvLine(cut: PowerCutView, now: number = Date.now()): string {
 /** The Overview headline's note during a real cut (like batteryNote for the UPS). */
 export function homePowerNote(s: PowerStatus | null, now: number = Date.now()): string | null {
   if (!s || s.test) return null;
-  const level = deltaLevel(s.delta);
+  const level = deltaLevel(s.delta, s.settings);
   if (s.cut && !s.cut.test) {
     const d = formatDuration(secondsSince(s.cut.start, now));
     const what =
@@ -79,23 +79,36 @@ export function deltaOnBattery(d: PowerDelta | null | undefined, low = false): b
   return !!d?.available && d.state === 'on_battery' && (!low || !!d.lowBattery);
 }
 
-/** "97%, about 5 h 20 m left" on battery, "97%" otherwise; null without a reading. */
-function deltaLevel(d: PowerDelta | null | undefined): string | null {
+/** The Delta's charge and discharge limits; the whole battery when the agent doesn't send them. */
+export function deltaLimits(s: Partial<PowerSettings> | null | undefined): { ceiling: number; floor: number } {
+  return { ceiling: s?.chargeLimit ?? 100, floor: s?.dischargeLimit ?? 0 };
+}
+
+/** "about 5 h 20 m left", "… left to 10%" with a discharge limit (the agent counts it to there). */
+function timeLeft(sec: number, floor: number): string {
+  return `about ${formatDuration(sec)} left${floor > 0 ? ` to ${floor}%` : ''}`;
+}
+
+/** "97%, about 5 h 20 m left to 10%" on battery, "97%" otherwise; null without a reading. */
+function deltaLevel(d: PowerDelta | null | undefined, settings?: Partial<PowerSettings> | null): string | null {
   if (!d?.available || d.charge == null) return null;
-  return d.state === 'on_battery' && d.runtimeSec != null ? `${d.charge}%, about ${formatDuration(d.runtimeSec)} left` : `${d.charge}%`;
+  const { floor } = deltaLimits(settings);
+  return d.state === 'on_battery' && d.runtimeSec != null ? `${d.charge}%, ${timeLeft(d.runtimeSec, floor)}` : `${d.charge}%`;
 }
 
 /**
- * The Delta in one line: "On battery · 97% · about 5 h 20 m left · load 15 W · 35 °C",
- * "On mains · charging 87% at 300 W · full in about 25 min · load 21 W", "On mains · 95% · load 21 W".
+ * The Delta in one line: "On battery · 97% · about 5 h 20 m left to 10% · load 15 W · 35 °C",
+ * "On mains · charging 87% → 95% at 300 W · full in about 25 min · load 21 W", "On mains · 95% · load 21 W".
  */
-export function deltaLine(d: PowerDelta | null | undefined): string | null {
+export function deltaLine(d: PowerDelta | null | undefined, settings?: Partial<PowerSettings> | null): string | null {
   if (!d?.available) return null;
+  const { ceiling, floor } = deltaLimits(settings);
   const pct = d.charge != null ? `${d.charge}%` : null;
-  const charging = `${pct ? `charging ${pct}` : 'charging'}${d.chargeW != null ? ` at ${d.chargeW} W` : ''}`;
+  const target = pct && ceiling < 100 ? ` → ${ceiling}%` : '';
+  const charging = `${pct ? `charging ${pct}${target}` : 'charging'}${d.chargeW != null ? ` at ${d.chargeW} W` : ''}`;
   const parts =
     d.state === 'on_battery'
-      ? ['On battery', pct, d.runtimeSec != null ? `about ${formatDuration(d.runtimeSec)} left` : null, d.lowBattery ? 'battery low' : null]
+      ? ['On battery', pct, d.runtimeSec != null ? timeLeft(d.runtimeSec, floor) : null, d.lowBattery ? 'battery low' : null]
       : d.state === 'charging'
         ? ['On mains', charging, d.fullInSec != null ? `full in about ${formatDuration(d.fullInSec)}` : null]
         : ['On mains', pct];
@@ -135,12 +148,14 @@ function roughDuration(sec: number): string {
 export function runtimeLine(s: PowerStatus | null, now: number = Date.now()): string | null {
   const r = s?.runtime;
   if (!s || !r) return null;
+  const { ceiling, floor } = deltaLimits(s.settings);
   const cut = s.cut;
   if (cut) {
     if (cut.mode === 'countdown' && r.afterSwitchOffSec != null && cut.switchOffAt) {
       const end = new Date(cut.switchOffAt).getTime() + r.afterSwitchOffSec * 1000;
       const pct = r.chargeAtSwitchOff != null ? ` (Delta about ${r.chargeAtSwitchOff}%)` : '';
-      return `After the switch-off${pct}, the network alone lasts about ${roughDuration(r.afterSwitchOffSec)}, until about ${dayClock(new Date(end).toISOString(), new Date(now))}.`;
+      const off = floor > 0 ? `, when the Delta switches off at ${floor}%` : '';
+      return `After the switch-off${pct}, the network alone lasts about ${roughDuration(r.afterSwitchOffSec)}, until about ${dayClock(new Date(end).toISOString(), new Date(now))}${off}.`;
     }
     if (cut.mode === 'until_power' && r.networkNowSec != null) {
       return `With the TV group off, the network alone would last about ${roughDuration(r.networkNowSec)}.`;
@@ -150,11 +165,14 @@ export function runtimeLine(s: PowerStatus | null, now: number = Date.now()): st
   if (r.networkFullSec == null) {
     return 'The Pi learns how long the network alone lasts once a power cut runs a few minutes past the TV group’s switch-off.';
   }
+  // The agent counts both figures from the charge limit (a full battery) down to the discharge limit.
+  const limits = [ceiling < 100 ? `charges to ${ceiling}%` : null, floor > 0 ? `switches off at ${floor}%` : null].filter(Boolean);
+  const note = limits.length ? ` The Delta ${limits.join(' and ')}.` : '';
   const charge = s.delta?.available ? s.delta.charge : undefined;
-  if (charge != null && charge < 99 && r.networkNowSec != null) {
-    return `In a long power cut the network alone would last about ${roughDuration(r.networkNowSec)} at ${charge}% (${roughDuration(r.networkFullSec)} on a full battery).`;
+  if (charge != null && charge < ceiling - 1 && r.networkNowSec != null) {
+    return `In a long power cut the network alone would last about ${roughDuration(r.networkNowSec)} at ${charge}% (${roughDuration(r.networkFullSec)} on a full battery).${note}`;
   }
-  return `In a long power cut the network alone would last about ${roughDuration(r.networkFullSec)} on a full battery.`;
+  return `In a long power cut the network alone would last about ${roughDuration(r.networkFullSec)} on a full battery.${note}`;
 }
 
 export const extensionLabel: Record<string, string> = {

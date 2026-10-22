@@ -666,6 +666,9 @@ export interface PowerSettings {
   cutoffMinutes: number;
   quietStart: string;
   quietEnd: string;
+  /** The Delta's limits as set in the EcoFlow app (it doesn't report them); absent from an older agent. */
+  chargeLimit?: number; // 50–100: it stops charging here
+  dischargeLimit?: number; // 0–30: it switches its sockets off here
 }
 
 export interface PowerTest {

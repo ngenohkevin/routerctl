@@ -26,7 +26,7 @@ function PlugsPowerCard() {
       ? `TV group ${tv.on === null ? 'not answering' : tv.on ? 'on' : 'off'}`
       : null;
   const problem = (s?.problems ?? [])[0];
-  const delta = deltaLine(s?.delta);
+  const delta = deltaLine(s?.delta, s?.settings);
   return (
     <Link
       href="/power"
