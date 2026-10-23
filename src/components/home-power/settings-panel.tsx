@@ -48,6 +48,7 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
   // An agent from before the limits doesn't send them, and would drop them.
   const limitsKnown = s?.settings.dischargeLimit !== undefined;
   const { ceiling } = deltaLimits(s?.delta, s?.settings);
+  const learned = s?.delta?.chargeLimit !== undefined; // agents since 2026-10-23 learn it
 
   async function save() {
     const problem = limitsKnown ? limitsProblem(dischargeLimit) : null;
@@ -135,8 +136,10 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
           </div>
           <p className="text-xs text-ink-3">
             Set this to match the EcoFlow app: the Delta doesn’t tell the Pi. It switches its sockets off, the network included, at
-            the discharge limit, so the times shown count down to it. It charges to {ceiling}%: the Pi sees that from where the
-            Delta stops charging, so a new charge limit in the app needs nothing here.
+            the discharge limit, so the times shown count down to it.{' '}
+            {learned
+              ? `The charge limit needs nothing here: the Pi takes it from where the Delta stops charging, last at ${ceiling}%, and sees a change in the app the next time it stops.`
+              : `It charges to ${ceiling}%.`}
           </p>
         </>
       ) : (
