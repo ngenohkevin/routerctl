@@ -158,6 +158,13 @@ export interface LineStatus extends LineQuality {
   capacityMbps?: number;
   capacityAt?: string;
   capacitySource?: 'probe' | 'speed test' | 'streaming test';
+  /** Two bad cycles in three minutes: everything leaves it, nothing goes onto it. */
+  unstable?: boolean;
+  unstableSince?: string;
+  /** While unstable: when it is used again, if it stays clean until then. */
+  backAfter?: string;
+  /** Back in use; streaming routes and the house move onto it for speed again from then. */
+  settlesAt?: string;
 }
 
 // Primary-line selection. In auto, the agent puts the house on whichever line

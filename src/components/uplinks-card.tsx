@@ -20,6 +20,7 @@ import { timeAgo } from '@/components/device-detail-dialog';
 import { Panel, PanelHeader } from '@/components/shell/panel';
 import { Led, toneFor, type LedTone } from '@/components/shell/led';
 import { useNetwork } from '@/stores/network';
+import { dayClock } from '@/lib/power';
 import type { WANLink, CDNGroupStatus, CFHealth, LineState } from '@/types';
 
 const GROUP_TITLES: Record<string, string> = {
@@ -182,7 +183,10 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
           const down = l.status !== 'bound';
           const noInternet = !down && l.alive === false;
           const dead = down || noInternet;
-          const tone = lineTone(l);
+          const fit = failover?.lines.find((x) => x.interface === l.interface);
+          const unstable = !dead && fit?.unstable;
+          const baseTone = lineTone(l);
+          const tone = unstable && baseTone === 'link' ? 'amber' : baseTone;
           const ms = l.medianMs ?? l.pingMs;
           return (
             <div
@@ -210,8 +214,10 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                     <Crown className="size-3" /> Primary
                   </span>
                 ) : (
-                  <span className={cn('text-[11px] font-medium', dead ? 'text-fault' : 'text-ink-4')}>
-                    {down ? 'Down' : noInternet ? 'No internet' : 'Standby'}
+                  <span
+                    className={cn('text-[11px] font-medium', dead ? 'text-fault' : unstable ? 'text-amber' : 'text-ink-4')}
+                  >
+                    {down ? 'Down' : noInternet ? 'No internet' : unstable ? 'Unstable' : 'Standby'}
                   </span>
                 )}
               </div>
@@ -226,6 +232,17 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                   {l.state && l.state !== 'up' && <span className="font-sans font-medium">{LINE_LABEL[l.state]} · </span>}
                   {ms ? `${Math.round(ms)} ms` : '—'}
                   {l.lossPct !== undefined ? ` · ${Math.round(l.lossPct)}% loss` : ''}
+                </div>
+              )}
+
+              {unstable && fit?.unstableSince && fit.backAfter && (
+                <div className="mt-0.5 pl-4 text-[11px] text-amber">
+                  Unstable since {dayClock(fit.unstableSince)}: kept off until {dayClock(fit.backAfter)} if it stays clean
+                </div>
+              )}
+              {!dead && !unstable && fit?.settlesAt && (
+                <div className="mt-0.5 pl-4 text-[11px] text-ink-4">
+                  Back in use after being unstable; streaming routes can move back to it from {dayClock(fit.settlesAt)}
                 </div>
               )}
 
@@ -460,6 +477,7 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                       const pinned = !isAuto && carrying;
                       const probe = g.health?.find((hh) => hh.interface === l.interface);
                       const st = probeState(probe);
+                      const lineUnstable = !dead && failover?.lines.find((x) => x.interface === l.interface)?.unstable;
                       return (
                         <button
                           key={l.interface}
@@ -468,9 +486,11 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                           title={
                             dead
                               ? 'Line has no internet'
-                              : st === 'degraded'
-                                ? `This line is up, but the ${title} probe is timing out on it — usually congestion, not an outage`
-                                : `Pin ${title} to ${l.label || l.interface}`
+                              : lineUnstable
+                                ? `This line is unstable: ${title} stays off it until it has been clean for a while`
+                                : st === 'degraded'
+                                  ? `This line is up, but the ${title} probe is timing out on it — usually congestion, not an outage`
+                                  : `Pin ${title} to ${l.label || l.interface}`
                           }
                           onClick={() => handleCdnSwitch(g, l.interface, l.label || l.interface)}
                           className={cn(
@@ -483,8 +503,13 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                             <span className="truncate">{l.label || l.interface}</span>
                             {pinned && <Pin className="ml-auto size-3 shrink-0 text-ink-4" />}
                           </span>
-                          <span className={cn('num font-mono text-[11px]', st ? PROBE_TONE[st] : 'text-ink-4')}>
-                            {st === 'up' ? `${probe?.pingMs} ms` : st ? PROBE_TEXT[st] : '—'}
+                          <span
+                            className={cn(
+                              'num font-mono text-[11px]',
+                              lineUnstable ? 'text-amber' : st ? PROBE_TONE[st] : 'text-ink-4'
+                            )}
+                          >
+                            {lineUnstable ? 'unstable' : st === 'up' ? `${probe?.pingMs} ms` : st ? PROBE_TEXT[st] : '—'}
                           </span>
                         </button>
                       );
@@ -497,7 +522,10 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
         </div>
       )}
 
-      <p className="mt-4 text-[11px] text-ink-4">The router itself fails over in ~20–30s if the primary stops passing traffic.</p>
+      <p className="mt-4 text-[11px] text-ink-4">
+        The router itself fails over in ~20–30s if the primary stops passing traffic. A line that keeps failing is marked
+        unstable: the house, streaming routes and new connections leave it at once.
+      </p>
 
       <AlertDialog open={confirmTarget !== null} onOpenChange={(o) => !o && setConfirmTarget(null)}>
         <AlertDialogContent>
