@@ -237,12 +237,13 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
 
               {unstable && fit?.unstableSince && fit.backAfter && (
                 <div className="mt-0.5 pl-4 text-[11px] text-amber">
-                  Unstable since {dayClock(fit.unstableSince)}: kept off until {dayClock(fit.backAfter)} if it stays clean
+                  Unstable since {dayClock(fit.unstableSince)}; trusted again from {dayClock(fit.backAfter)} if it stays clean
                 </div>
               )}
               {!dead && !unstable && fit?.settlesAt && (
                 <div className="mt-0.5 pl-4 text-[11px] text-ink-4">
-                  Back in use after being unstable; streaming routes can move back to it from {dayClock(fit.settlesAt)}
+                  Back in use after being unstable; the house and streaming routes move to it for speed again from{' '}
+                  {dayClock(fit.settlesAt)}
                 </div>
               )}
 
@@ -487,7 +488,7 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                             dead
                               ? 'Line has no internet'
                               : lineUnstable
-                                ? `This line is unstable: ${title} stays off it until it has been clean for a while`
+                                ? `This line is unstable, so automatic routing keeps ${title} off it. Tap to pin it here anyway`
                                 : st === 'degraded'
                                   ? `This line is up, but the ${title} probe is timing out on it — usually congestion, not an outage`
                                   : `Pin ${title} to ${l.label || l.interface}`
