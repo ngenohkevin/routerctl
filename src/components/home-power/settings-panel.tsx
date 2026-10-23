@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Panel, PanelHeader } from '@/components/shell/panel';
 import { api } from '@/lib/api';
-import { limitsProblem } from '@/lib/home-power';
+import { deltaLimits, limitsProblem } from '@/lib/home-power';
 import { TOUCH } from './touch';
 import { usePowerStore } from '@/stores/power';
 import type { PowerStatus } from '@/types';
@@ -28,7 +28,6 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
   const [cutoff, setCutoff] = useState('20');
   const [quietStart, setQuietStart] = useState('23:00');
   const [quietEnd, setQuietEnd] = useState('07:00');
-  const [chargeLimit, setChargeLimit] = useState('100');
   const [dischargeLimit, setDischargeLimit] = useState('0');
   const [loadedFrom, setLoadedFrom] = useState<string | null>(null);
   const [minutes, setMinutes] = useState<5 | 15 | 30>(5);
@@ -42,16 +41,16 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
     setCutoff(String(s.settings.cutoffMinutes));
     setQuietStart(s.settings.quietStart);
     setQuietEnd(s.settings.quietEnd);
-    setChargeLimit(String(s.settings.chargeLimit ?? 100));
     setDischargeLimit(String(s.settings.dischargeLimit ?? 0));
     setLoadedFrom(s.updatedAt ?? 'loaded');
   }, [s, loadedFrom]);
 
   // An agent from before the limits doesn't send them, and would drop them.
-  const limitsKnown = s?.settings.chargeLimit !== undefined;
+  const limitsKnown = s?.settings.dischargeLimit !== undefined;
+  const { ceiling } = deltaLimits(s?.delta, s?.settings);
 
   async function save() {
-    const problem = limitsKnown ? limitsProblem(chargeLimit, dischargeLimit) : null;
+    const problem = limitsKnown ? limitsProblem(dischargeLimit) : null;
     if (problem) {
       toast.error(problem);
       return;
@@ -63,7 +62,7 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
           cutoffMinutes: Number(cutoff),
           quietStart,
           quietEnd,
-          ...(limitsKnown ? { chargeLimit: Number(chargeLimit), dischargeLimit: Number(dischargeLimit) } : {}),
+          ...(limitsKnown ? { dischargeLimit: Number(dischargeLimit) } : {}),
         }),
       );
       toast.success('Settings saved');
@@ -123,17 +122,6 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
         <>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="power-charge-limit">Delta charge limit (%)</Label>
-              <Input
-                id="power-charge-limit"
-                type="number"
-                min={50}
-                max={100}
-                value={chargeLimit}
-                onChange={(e) => setChargeLimit(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
               <Label htmlFor="power-discharge-limit">Delta discharge limit (%)</Label>
               <Input
                 id="power-discharge-limit"
@@ -146,12 +134,13 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
             </div>
           </div>
           <p className="text-xs text-ink-3">
-            Set these to match the EcoFlow app: the Delta doesn’t tell the Pi. It stops charging at the charge limit and switches its
-            sockets off, the network included, at the discharge limit, so the times shown count down to it.
+            Set this to match the EcoFlow app: the Delta doesn’t tell the Pi. It switches its sockets off, the network included, at
+            the discharge limit, so the times shown count down to it. It charges to {ceiling}%: the Pi sees that from where the
+            Delta stops charging, so a new charge limit in the app needs nothing here.
           </p>
         </>
       ) : (
-        <p className="text-xs text-ink-3">The Delta’s charge limits can be set here once the agent on the Pi is updated.</p>
+        <p className="text-xs text-ink-3">The Delta’s discharge limit can be set here once the agent on the Pi is updated.</p>
       )}
       <Button size="sm" className={TOUCH} onClick={save} disabled={busy}>
         Save settings

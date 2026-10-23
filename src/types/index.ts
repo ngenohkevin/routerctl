@@ -666,9 +666,10 @@ export interface PowerSettings {
   cutoffMinutes: number;
   quietStart: string;
   quietEnd: string;
-  /** The Delta's limits as set in the EcoFlow app (it doesn't report them); absent from an older agent. */
-  chargeLimit?: number; // 50–100: it stops charging here
+  /** The Delta's discharge limit as set in the EcoFlow app (it doesn't report it); absent from an older agent. */
   dischargeLimit?: number; // 0–30: it switches its sockets off here
+  /** Only from the agent of 2026-10-22, where it was typed in; newer agents learn it (PowerDelta.chargeLimit). */
+  chargeLimit?: number;
 }
 
 export interface PowerTest {
@@ -743,8 +744,10 @@ export interface PowerDelta {
   charge?: number;
   /** On battery only. */
   runtimeSec?: number;
-  /** Charging only: about this long to the charge limit. */
+  /** Charging only: about this long to the charge limit (to 100% while it charges past the one last seen). */
   fullInSec?: number;
+  /** Where the Delta last stopped charging on mains: its charge limit as set in the EcoFlow app (older agents omit it). */
+  chargeLimit?: number;
   error?: string;
   readAt?: string;
   // From the Delta's serial port (older agents omit them). Watts are the last minute's average.
@@ -763,7 +766,7 @@ export interface PowerDelta {
 
 export interface PowerEvent {
   at: string;
-  kind: 'switch' | 'problem' | 'settings' | 'test' | 'plug';
+  kind: 'switch' | 'problem' | 'settings' | 'test' | 'plug' | 'delta';
   detail: string;
   ok: boolean;
   note?: string;

@@ -79,17 +79,21 @@ export function deltaOnBattery(d: PowerDelta | null | undefined, low = false): b
   return !!d?.available && d.state === 'on_battery' && (!low || !!d.lowBattery);
 }
 
-/** The Delta's charge and discharge limits; the whole battery when the agent doesn't send them. */
-export function deltaLimits(s: Partial<PowerSettings> | null | undefined): { ceiling: number; floor: number } {
-  return { ceiling: s?.chargeLimit ?? 100, floor: s?.dischargeLimit ?? 0 };
+/**
+ * The Delta's charge limit (learned by the agent from where it stops charging; typed in on the agent of
+ * 2026-10-22) and discharge limit (a setting); the whole battery when the agent sends neither.
+ */
+export function deltaLimits(
+  d: PowerDelta | null | undefined,
+  s: Partial<PowerSettings> | null | undefined,
+): { ceiling: number; floor: number } {
+  return { ceiling: d?.chargeLimit ?? s?.chargeLimit ?? 100, floor: s?.dischargeLimit ?? 0 };
 }
 
-/** The settings form's limits, or why they can't be saved: whole numbers in the EcoFlow app's ranges. */
-export function limitsProblem(charge: string, discharge: string): string | null {
-  const whole = (v: string, lo: number, hi: number) => /^\d+$/.test(v.trim()) && Number(v) >= lo && Number(v) <= hi;
-  if (!whole(charge, 50, 100)) return 'Enter the Delta’s charge limit: a whole number from 50 to 100.';
-  if (!whole(discharge, 0, 30)) return 'Enter the Delta’s discharge limit: a whole number from 0 to 30.';
-  return null;
+/** The settings form's discharge limit, or why it can't be saved: a whole number in the EcoFlow app's range. */
+export function limitsProblem(discharge: string): string | null {
+  const whole = /^\d+$/.test(discharge.trim()) && Number(discharge) >= 0 && Number(discharge) <= 30;
+  return whole ? null : 'Enter the Delta’s discharge limit: a whole number from 0 to 30.';
 }
 
 /** "about 5 h 20 m left", "… left to 10%" with a discharge limit (the agent counts it to there). */
@@ -100,7 +104,7 @@ function timeLeft(sec: number, floor: number): string {
 /** "97%, about 5 h 20 m left to 10%" on battery, "97%" otherwise; null without a reading. */
 function deltaLevel(d: PowerDelta | null | undefined, settings?: Partial<PowerSettings> | null): string | null {
   if (!d?.available || d.charge == null) return null;
-  const { floor } = deltaLimits(settings);
+  const { floor } = deltaLimits(d, settings);
   return d.state === 'on_battery' && d.runtimeSec != null ? `${d.charge}%, ${timeLeft(d.runtimeSec, floor)}` : `${d.charge}%`;
 }
 
@@ -110,7 +114,7 @@ function deltaLevel(d: PowerDelta | null | undefined, settings?: Partial<PowerSe
  */
 export function deltaLine(d: PowerDelta | null | undefined, settings?: Partial<PowerSettings> | null): string | null {
   if (!d?.available) return null;
-  const { ceiling, floor } = deltaLimits(settings);
+  const { ceiling, floor } = deltaLimits(d, settings);
   const pct = d.charge != null ? `${d.charge}%` : null;
   const target = d.charge != null && d.charge < ceiling && ceiling < 100 ? ` → ${ceiling}%` : '';
   const charging = `${pct ? `charging ${pct}${target}` : 'charging'}${d.chargeW != null ? ` at ${d.chargeW} W` : ''}`;
@@ -156,7 +160,7 @@ function roughDuration(sec: number): string {
 export function runtimeLine(s: PowerStatus | null, now: number = Date.now()): string | null {
   const r = s?.runtime;
   if (!s || !r) return null;
-  const { ceiling, floor } = deltaLimits(s.settings);
+  const { ceiling, floor } = deltaLimits(s.delta, s.settings);
   const cut = s.cut;
   if (cut) {
     if (cut.mode === 'countdown' && r.afterSwitchOffSec != null && cut.switchOffAt) {
