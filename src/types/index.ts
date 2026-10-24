@@ -769,6 +769,19 @@ export interface PowerDelta {
   firmware?: string;
   /** The serial port is read but gave nothing for 30 s. */
   wattsError?: string;
+  // Bluetooth (agents since 2026-10-24).
+  /** Where the reading came from: USB (NUT) or Bluetooth (when USB isn't answering). */
+  source?: 'usb' | 'bluetooth';
+  /** Read over Bluetooth because USB isn't answering: why not. */
+  usbError?: string;
+  /** Bluetooth is set up but not reading: why not. */
+  bluetoothError?: string;
+  /** The discharge limit set in the EcoFlow app, as the Delta reports it over Bluetooth. */
+  dischargeLimit?: number;
+  /** Over Bluetooth: the Delta's USB outputs are off, and its USB link to the Pi with them. */
+  usbOutputsOff?: boolean;
+  /** Its idle timeout for the USB outputs, in minutes (omitted when it's Never). */
+  usbTimeoutMin?: number;
 }
 
 export interface PowerEvent {

@@ -49,9 +49,10 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
   const limitsKnown = s?.settings.dischargeLimit !== undefined;
   const { ceiling } = deltaLimits(s?.delta, s?.settings);
   const learned = s?.delta?.chargeLimit !== undefined; // agents since 2026-10-23 learn it
+  const fromDelta = s?.delta?.dischargeLimit; // read over Bluetooth (agents since 2026-10-24)
 
   async function save() {
-    const problem = limitsKnown ? limitsProblem(dischargeLimit) : null;
+    const problem = limitsKnown && fromDelta == null ? limitsProblem(dischargeLimit) : null;
     if (problem) {
       toast.error(problem);
       return;
@@ -63,7 +64,7 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
           cutoffMinutes: Number(cutoff),
           quietStart,
           quietEnd,
-          ...(limitsKnown ? { dischargeLimit: Number(dischargeLimit) } : {}),
+          ...(limitsKnown ? { dischargeLimit: fromDelta ?? Number(dischargeLimit) } : {}),
         }),
       );
       toast.success('Settings saved');
@@ -119,7 +120,13 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
         Each cut starts from the cutoff; extensions apply to that cut only. In quiet hours the Pi’s messages arrive silently;
         Kuma’s power-cut alert still sounds.
       </p>
-      {limitsKnown ? (
+      {fromDelta != null ? (
+        <p className="text-xs text-ink-3">
+          The Delta reports its limits over Bluetooth, as set in the EcoFlow app: it charges to {ceiling}% and switches its
+          sockets off, the network included, at {fromDelta}%, so the times shown count down to {fromDelta}%. Change them in
+          the app.
+        </p>
+      ) : limitsKnown ? (
         <>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { clock } from '@/lib/power';
 import {
   deltaLine,
+  deltaSourceNote,
   deltaOnBattery,
   homePowerHeadline,
   homePowerPanelTone,
@@ -69,9 +70,10 @@ export function PowerStatusPanel({
       {failed && <p className="text-sm text-ink-2">The dashboard can’t reach the agent on the Pi.</p>}
       {!failed && s?.delta && (
         <p className={cn('num font-mono text-xs', s.delta.available ? 'text-ink-2' : 'text-ink-3')}>
-          Delta · {deltaLine(s.delta, s.settings) ?? `no reading over USB${s.delta.error ? ` (${s.delta.error})` : ''}`}
+          Delta · {deltaLine(s.delta, s.settings) ?? `no reading${s.delta.error ? ` (${s.delta.error})` : ''}`}
         </p>
       )}
+      {!failed && deltaSourceNote(s?.delta) && <p className="text-xs text-ink-3">{deltaSourceNote(s?.delta)}</p>}
       {!failed && s?.delta && (
         <p className="text-xs text-ink-3">
           {s.test

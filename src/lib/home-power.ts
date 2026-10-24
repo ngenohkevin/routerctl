@@ -87,7 +87,7 @@ export function deltaLimits(
   d: PowerDelta | null | undefined,
   s: Partial<PowerSettings> | null | undefined,
 ): { ceiling: number; floor: number } {
-  return { ceiling: d?.chargeLimit ?? s?.chargeLimit ?? 100, floor: s?.dischargeLimit ?? 0 };
+  return { ceiling: d?.chargeLimit ?? s?.chargeLimit ?? 100, floor: d?.dischargeLimit ?? s?.dischargeLimit ?? 0 };
 }
 
 /** The settings form's discharge limit, or why it can't be saved: a whole number in the EcoFlow app's range. */
@@ -125,7 +125,25 @@ export function deltaLine(d: PowerDelta | null | undefined, settings?: Partial<P
         ? ['On mains', charging, d.fullInSec != null ? `full in about ${formatDuration(d.fullInSec)}` : null]
         : ['On mains', pct];
   parts.push(d.outW != null ? `load ${d.outW} W` : d.wattsError ? 'no watts' : null, d.tempC != null ? `${d.tempC} °C` : null);
+  parts.push(d.source === 'bluetooth' ? 'over Bluetooth' : null);
   return parts.filter(Boolean).join(' · ');
+}
+
+/**
+ * How the Delta is being read, when it matters: over Bluetooth because USB isn't answering (with what to do
+ * when its USB outputs are off, which takes the USB link down), or Bluetooth failing while USB works.
+ */
+export function deltaSourceNote(d: PowerDelta | null | undefined): string | null {
+  if (!d?.available) return null;
+  if (d.source === 'bluetooth') {
+    let note = 'Read over Bluetooth: the Delta isn’t answering over USB.';
+    if (d.usbOutputsOff) {
+      const timeout = d.usbTimeoutMin ? ` (it now switches them off after ${formatDuration(d.usbTimeoutMin * 60)} idle)` : '';
+      note += ` Its USB outputs are switched off, and its USB link goes with them: press the USB button on the Delta, and set its DC/USB timeout to Never in the EcoFlow app${timeout}.`;
+    }
+    return note;
+  }
+  return d.bluetoothError ? `Bluetooth isn’t reading the Delta: ${d.bluetoothError}.` : null;
 }
 
 /** "TV group is on and in use", "TV group is on standby", from the Delta's load; plain "on" when the Pi can't tell. */
