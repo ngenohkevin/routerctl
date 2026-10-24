@@ -60,6 +60,7 @@ export function PowerStatusPanel({
   const runtime = failed ? null : runtimeLine(s, now);
   const held = failed ? null : warningNote(s, now);
   const tv = (s?.plugs ?? []).find((p) => p.role === 'tv');
+  const sourceNote = failed ? null : deltaSourceNote(s?.delta);
 
   return (
     <Panel tone={homePowerPanelTone(s, failed)} className="space-y-3">
@@ -73,7 +74,7 @@ export function PowerStatusPanel({
           Delta · {deltaLine(s.delta, s.settings) ?? `no reading${s.delta.error ? ` (${s.delta.error})` : ''}`}
         </p>
       )}
-      {!failed && deltaSourceNote(s?.delta) && <p className="text-xs text-ink-3">{deltaSourceNote(s?.delta)}</p>}
+      {sourceNote && <p className="text-xs text-ink-3">{sourceNote}</p>}
       {!failed && s?.delta && (
         <p className="text-xs text-ink-3">
           {s.test
