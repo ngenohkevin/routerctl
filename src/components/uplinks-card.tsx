@@ -480,6 +480,8 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                       const pinned = !isAuto && carrying;
                       const probe = g.health?.find((hh) => hh.interface === l.interface);
                       const st = probeState(probe);
+                      const recent = g.recent?.[l.interface];
+                      const typicalMs = recent && recent.medianMs > 0 ? recent.medianMs : probe?.pingMs;
                       const lineUnstable =
                         !dead && !g.ownPath && failover?.lines.find((x) => x.interface === l.interface)?.unstable;
                       return (
@@ -494,7 +496,13 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                                 ? `This line is unstable, so automatic routing keeps ${title} off it. Tap to pin it here anyway`
                                 : st === 'degraded'
                                   ? `This line is up, but the ${title} probe is timing out on it — usually congestion, not an outage`
-                                  : `Pin ${title} to ${l.label || l.interface}`
+                                  : recent && recent.medianMs > 0
+                                    ? `Typical ${recent.medianMs} ms over the last ${recent.samples} checks${
+                                        recent.slow > 0
+                                          ? `; ${recent.slow} waited for a lost packet or failed`
+                                          : ''
+                                      }. Tap to pin ${title} to ${l.label || l.interface}`
+                                    : `Pin ${title} to ${l.label || l.interface}`
                           }
                           onClick={() => handleCdnSwitch(g, l.interface, l.label || l.interface)}
                           className={cn(
@@ -513,7 +521,13 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                               lineUnstable ? 'text-amber' : st ? PROBE_TONE[st] : 'text-ink-4'
                             )}
                           >
-                            {lineUnstable ? 'unstable' : st === 'up' ? `${probe?.pingMs} ms` : st ? PROBE_TEXT[st] : '—'}
+                            {lineUnstable ? 'unstable' : st === 'up' ? `${typicalMs} ms` : st ? PROBE_TEXT[st] : '—'}
+                            {!lineUnstable && st === 'up' && recent && recent.slow > 0 && (
+                              <span className="text-amber">
+                                {' '}
+                                · {recent.slow}/{recent.samples} slow
+                              </span>
+                            )}
                           </span>
                         </button>
                       );

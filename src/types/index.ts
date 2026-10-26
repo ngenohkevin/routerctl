@@ -212,6 +212,15 @@ export interface CDNGroupStatus {
   // Judges each line by its own server's answers, not the line's verdict
   // (TorBox, Real-Debrid): an "unstable" line it still reaches keeps it.
   ownPath?: boolean;
+  // Per line: the last checks' typical handshake, so one lost packet (a 1-3 s
+  // resend) doesn't make a line read 10x slower than it is.
+  recent?: Record<string, RecentProbe>;
+}
+
+export interface RecentProbe {
+  medianMs: number; // median handshake of the checks that connected
+  samples: number; // how many checks (the last ~10 minutes)
+  slow: number; // how many waited for a lost packet (>= 0.9 s) or failed
 }
 
 export interface CDNSteering {
