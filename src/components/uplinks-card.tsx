@@ -26,6 +26,8 @@ import type { WANLink, CDNGroupStatus, CFHealth, LineState } from '@/types';
 const GROUP_TITLES: Record<string, string> = {
   cloudflare: 'Cloudflare',
   google: 'YouTube · Google',
+  torbox: 'TorBox',
+  realdebrid: 'Real-Debrid',
 };
 
 const PROBE_TONE: Record<string, string> = {

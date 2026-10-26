@@ -198,9 +198,9 @@ export interface WANFailoverStatus {
   }[];
 }
 
-// Per-group CDN steering state (cloudflare / google), independently steered
+// Per-group CDN steering state (cloudflare / google / torbox / realdebrid), independently steered
 export interface CDNGroupStatus {
-  group: string; // "cloudflare" | "google"
+  group: string; // "cloudflare" | "google" | "torbox" | "realdebrid"
   interface: string;
   label?: string;
   routes: number;
