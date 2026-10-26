@@ -480,7 +480,8 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
                       const pinned = !isAuto && carrying;
                       const probe = g.health?.find((hh) => hh.interface === l.interface);
                       const st = probeState(probe);
-                      const lineUnstable = !dead && failover?.lines.find((x) => x.interface === l.interface)?.unstable;
+                      const lineUnstable =
+                        !dead && !g.ownPath && failover?.lines.find((x) => x.interface === l.interface)?.unstable;
                       return (
                         <button
                           key={l.interface}
@@ -527,7 +528,8 @@ export function UplinksCard({ onTest, allowSetPrimary, disabled, refreshToken }:
 
       <p className="mt-4 text-[11px] text-ink-4">
         The router itself fails over in ~20–30s if the primary stops passing traffic. A line that keeps failing is marked
-        unstable: the house, streaming routes and new connections leave it at once.
+        unstable: the house, Cloudflare and YouTube routes and new connections leave it at once. TorBox and Real-Debrid go
+        by their own servers&apos; answers on each line instead.
       </p>
 
       <AlertDialog open={confirmTarget !== null} onOpenChange={(o) => !o && setConfirmTarget(null)}>

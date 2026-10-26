@@ -209,6 +209,9 @@ export interface CDNGroupStatus {
   health?: CFHealth[];
   lastAutoFlip?: string;
   lastAutoReason?: string;
+  // Judges each line by its own server's answers, not the line's verdict
+  // (TorBox, Real-Debrid): an "unstable" line it still reaches keeps it.
+  ownPath?: boolean;
 }
 
 export interface CDNSteering {
