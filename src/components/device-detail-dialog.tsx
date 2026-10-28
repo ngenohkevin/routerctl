@@ -10,6 +10,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import type { Device } from '@/types';
 import { formatBandwidth, formatDuration, prettyBand, formatByteCount } from '@/lib/utils';
+import { adapterLabel } from '@/lib/device';
 
 function formatBytesNum(bytes: string | undefined): string {
   if (!bytes) return '—';
@@ -88,10 +89,29 @@ export function DeviceDetailDialog({ device, open, onOpenChange }: DeviceDetailD
           <Row label="Type" value={device.deviceType && device.deviceType !== 'unknown' ? device.deviceType : null} />
           <Row label="Vendor" value={device.vendor} />
           <Row label="IP Address" value={device.ip} mono />
+          {device.adapters && device.adapters.length > 1 && (
+            <Row
+              label="Adapters"
+              value={
+                <>
+                  {device.adapters.map((a) => (
+                    <span key={a.mac} className="block">
+                      {a.mac} · {a.ip || '—'}
+                      <span className="block text-[10px] text-muted-foreground font-sans">
+                        {adapterLabel(a)}
+                        {a.status === 'offline' ? ` · seen ${timeAgo(a.lastSeen) ?? 'a while ago'}` : ' · connected'}
+                      </span>
+                    </span>
+                  ))}
+                </>
+              }
+              mono
+            />
+          )}
           <Row
             label="MAC"
             value={
-              <>
+              device.adapters && device.adapters.length > 1 ? null : <>
                 {device.mac}
                 {isRandomMAC && (
                   <span className="block text-[10px] text-muted-foreground font-sans">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { Ban, Check, Gauge, Pin, Power, ShieldCheck, Trash2, Zap } from 'lucide-react';
+import { Ban, Check, Gauge, Link2, Pin, Power, ShieldCheck, Trash2, Unlink, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -32,13 +32,16 @@ import { cn, formatBandwidth, formatDuration } from '@/lib/utils';
 import {
   DEVICE_TYPES,
   IDENTIFIED_BY,
+  adapterLabel,
   connectionLabel,
   displayName,
   identityLine,
   isOnline,
+  pendingAdapter,
+  randomizedMac,
   typeLabel,
 } from '@/lib/device';
-import type { Device } from '@/types';
+import type { Device, DeviceAdapter } from '@/types';
 
 function Section({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
   return (
@@ -71,6 +74,30 @@ function savedProfile(d: Device) {
     model: d.detectedModel !== undefined ? d.deviceModel ?? '' : '',
     notes: d.notes ?? '',
   };
+}
+
+const adapterOnline = (a: DeviceAdapter) => a.status === 'bound' || a.status === 'dynamic';
+
+function adapterKind(a: DeviceAdapter) {
+  return a.link === 'ethernet' ? 'Ethernet adapter' : a.link === 'wifi' ? 'Wi-Fi adapter' : 'second adapter';
+}
+
+/**
+ * Other entries that call themselves the same name, so may be this device's
+ * other adapter: offered for linking (an automatic link needs a handover;
+ * these may never have had one, or were separated by mistake).
+ */
+function sameNameDevices(device: Device, all: Device[]): Device[] {
+  const host = device.hostname?.trim().toLowerCase();
+  if (!host) return [];
+  return all.filter(
+    (d) =>
+      d.mac !== device.mac &&
+      !d.adapters?.length &&
+      !d.wanSide &&
+      !randomizedMac(d.mac) &&
+      d.hostname?.trim().toLowerCase() === host
+  );
 }
 
 function when(iso?: string) {
@@ -121,6 +148,17 @@ export function DeviceSheet({ device, open, onOpenChange, defaultLimit }: Device
   const detectedModel = device.detectedModel ?? device.deviceModel;
   const remembered = !!device.remembered;
   const manageable = !remembered && !!device.ip;
+  const adapters = device.adapters && device.adapters.length > 1 ? device.adapters : null;
+  const pending = pendingAdapter(device);
+  // The adapter whose address the device shows: the one in use.
+  const shownMac = adapters?.find((a) => a.ip === device.ip)?.mac ?? device.mac;
+  const sameName = sameNameDevices(device, store.devices);
+  // The one known longer keeps its record as the device's main one.
+  const joinAsOne = (other: Device) => {
+    const otherFirst = other.firstSeen ? Date.parse(other.firstSeen) : Infinity;
+    const thisFirst = device.firstSeen ? Date.parse(device.firstSeen) : Infinity;
+    return otherFirst < thisFirst ? store.linkDevice(device.mac, other.mac) : store.linkDevice(other.mac, device.mac);
+  };
 
   const saved = savedProfile(device);
   const dirty = (Object.keys(form) as (keyof typeof form)[]).some((k) => form[k].trim() !== saved[k]);
@@ -207,6 +245,26 @@ export function DeviceSheet({ device, open, onOpenChange, defaultLimit }: Device
                   <Check className="size-3.5" />
                   It&apos;s ours
                 </Button>
+              </div>
+            )}
+            {pending && (
+              <div className="rounded-lg border border-amber/35 bg-amber/5 px-3 py-2.5">
+                <p className="text-[13px] text-ink-2">
+                  Its {adapterKind(pending)} came online{pending.linkedAt ? ` ${timeAgo(pending.linkedAt)}` : ''} as its other one
+                  went quiet, under the same name, so it was joined to this device and given its settings. Same device?
+                </p>
+                <div className="mt-2 flex justify-end gap-2">
+                  <Button size="sm" variant="ghost" className="h-7 gap-1 text-ink-3" disabled={busy}
+                    onClick={() => run(() => store.unlinkDevice(pending.mac), 'Separated: it is a device of its own')}>
+                    <Unlink className="size-3.5" />
+                    Undo
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 gap-1 border-hairline-strong" disabled={busy}
+                    onClick={() => run(() => store.keepLink(pending.mac), 'Kept as one device')}>
+                    <Check className="size-3.5" />
+                    Same device
+                  </Button>
+                </div>
               </div>
             )}
           </SheetHeader>
@@ -356,23 +414,70 @@ export function DeviceSheet({ device, open, onOpenChange, defaultLimit }: Device
             aside={
               manageable && !device.reserved && device.status === 'bound' ? (
                 <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-ink-3" disabled={busy}
-                  onClick={() => run(async () => { await api.reserveLease(device.mac); await store.fetchDevices(); }, 'Address reserved')}>
+                  onClick={() => run(async () => { await api.reserveLease(shownMac); await store.fetchDevices(); }, 'Address reserved')}>
                   <Pin className="size-3.5" />
                   Reserve address
                 </Button>
               ) : null
             }
           >
+            {adapters && (
+              <ul className="mb-3 space-y-2">
+                {adapters.map((a) => {
+                  const on = adapterOnline(a);
+                  const inUse = on && a.mac === shownMac;
+                  return (
+                    <li key={a.mac} className="rounded-lg border border-hairline-soft px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="flex min-w-0 items-center gap-2 text-sm text-ink-2">
+                          <Led tone={on ? 'link' : 'off'} label={on ? 'Connected' : 'Not connected'} />
+                          <span className="truncate">{adapterLabel(a)}</span>
+                        </span>
+                        <span className="shrink-0 text-xs text-ink-3">
+                          {inUse ? 'In use' : on ? 'Connected' : `Seen ${timeAgo(a.lastSeen) ?? 'a while ago'}`}
+                        </span>
+                      </div>
+                      <div className="num mt-1 flex items-center justify-between gap-3 font-mono text-[12px] text-ink-3">
+                        <span>{a.ip || '—'}</span>
+                        <span className="truncate">{a.mac}</span>
+                      </div>
+                      {!a.main && !a.pending && (
+                        <div className="mt-1 flex justify-end">
+                          <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs text-ink-3" disabled={busy}
+                            onClick={() => run(() => store.unlinkDevice(a.mac), 'Separated: it is a device of its own')}>
+                            <Unlink className="size-3" />
+                            Separate
+                          </Button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {sameName.map((other) => (
+              <div key={other.mac} className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-hairline-soft px-3 py-2.5">
+                <p className="min-w-0 text-xs text-ink-3">
+                  <span className="num font-mono">{other.mac}</span> also calls itself {device.hostname}. If it&apos;s this
+                  device&apos;s other adapter, join them: one entry, one set of settings.
+                </p>
+                <Button size="sm" variant="outline" className="h-7 shrink-0 gap-1 border-hairline-strong" disabled={busy}
+                  onClick={() => run(() => joinAsOne(other), 'Joined as one device')}>
+                  <Link2 className="size-3.5" />
+                  Same device
+                </Button>
+              </div>
+            ))}
             <dl className="divide-y divide-hairline-soft">
               <Fact label="IP address" mono>
-                {device.ip ? (
+                {!adapters && device.ip ? (
                   <span className="inline-flex items-center gap-2">
                     {device.ip}
                     {device.reserved && <Chip className="h-5 px-1.5 text-[10px]">Reserved</Chip>}
                   </span>
                 ) : null}
               </Fact>
-              <Fact label="MAC" mono>{device.mac}{device.randomMac ? ' · private' : ''}</Fact>
+              <Fact label="MAC" mono>{adapters ? null : `${device.mac}${device.randomMac ? ' · private' : ''}`}</Fact>
               <Fact label="Calls itself" mono>{device.hostname}</Fact>
               <Fact label="Connection">{online ? connectionLabel(device) : null}</Fact>
               <Fact label="Signal" mono>{online && device.signalDbm ? `${device.signalDbm} dBm` : null}</Fact>

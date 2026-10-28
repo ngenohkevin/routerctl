@@ -17,7 +17,7 @@ import { timeAgo } from '@/components/device-detail-dialog';
 import { useDevicesStore } from '@/stores/devices';
 import { api, isAuthenticated } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { connectionLabel, displayName, identityLine, isOnline, policyChips } from '@/lib/device';
+import { connectionLabel, displayName, identityLine, isOnline, needsReview, pendingAdapter, policyChips } from '@/lib/device';
 import { usePower } from '@/stores/power';
 import type { Device } from '@/types';
 
@@ -27,7 +27,8 @@ const lan = (d: Device) => !d.wanSide && d.interface !== 'WAN';
 
 function matches(d: Device, q: string) {
   if (!q) return true;
-  const hay = [displayName(d), d.hostname, d.ip, d.mac, d.vendor, d.deviceModel, d.owner, d.os, d.notes]
+  const hay = [displayName(d), d.hostname, d.ip, d.mac, d.vendor, d.deviceModel, d.owner, d.os, d.notes,
+    ...(d.adapters ?? []).flatMap((a) => [a.mac, a.ip])]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
@@ -69,6 +70,7 @@ function DeviceRow({ d, onOpen }: { d: Device; onOpen: () => void }) {
           <div className="flex min-w-0 items-center gap-2">
             <span className={cn('truncate text-[15px] font-medium', online ? 'text-ink' : 'text-ink-2')}>{displayName(d)}</span>
             {d.isNew && <Chip tone="amber">New</Chip>}
+            {pendingAdapter(d) && <Chip tone="amber">Linked</Chip>}
           </div>
           <div className="mt-0.5 truncate text-xs text-ink-3">
             {[line, d.owner && `${d.owner}'s`].filter(Boolean).join(' · ') || 'Not identified'}
@@ -141,7 +143,7 @@ export default function DevicesPage() {
   const counts = {
     all: all.length,
     online: all.filter(isOnline).length,
-    new: all.filter((d) => d.isNew).length,
+    new: all.filter(needsReview).length,
     offline: all.filter((d) => !isOnline(d)).length,
     blocked: all.filter((d) => d.isBlocked).length,
   };
@@ -149,15 +151,15 @@ export default function DevicesPage() {
   const visible = all.filter((d) => matches(d, query.trim()));
   const pick = (f: Filter) =>
     visible.filter((d) =>
-      f === 'online' ? isOnline(d) : f === 'offline' ? !isOnline(d) : f === 'new' ? d.isNew : f === 'blocked' ? d.isBlocked : true
+      f === 'online' ? isOnline(d) : f === 'offline' ? !isOnline(d) : f === 'new' ? needsReview(d) : f === 'blocked' ? d.isBlocked : true
     );
 
   const groups =
     filter === 'all'
       ? [
-          { title: 'New — do you recognise these?', list: visible.filter((d) => d.isNew).sort(byLastSeen) },
-          { title: 'Online', list: visible.filter((d) => !d.isNew && isOnline(d)).sort(byName) },
-          { title: 'Offline', list: visible.filter((d) => !d.isNew && !isOnline(d)).sort(byLastSeen) },
+          { title: 'New — do you recognise these?', list: visible.filter(needsReview).sort(byLastSeen) },
+          { title: 'Online', list: visible.filter((d) => !needsReview(d) && isOnline(d)).sort(byName) },
+          { title: 'Offline', list: visible.filter((d) => !needsReview(d) && !isOnline(d)).sort(byLastSeen) },
         ]
       : [
           {

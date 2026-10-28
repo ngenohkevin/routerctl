@@ -322,6 +322,19 @@ export const api = {
     });
   },
 
+  /** Make mac another network adapter of the device withMac belongs to. */
+  async linkDevice(mac: string, withMac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/link`, {
+      method: 'POST',
+      body: JSON.stringify({ with: withMac }),
+    });
+  },
+
+  /** Make an adapter its own device again (and never link it automatically). */
+  async unlinkDevice(mac: string): Promise<{ message: string }> {
+    return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}/link`, { method: 'DELETE' });
+  },
+
   async forgetDevice(mac: string): Promise<{ message: string }> {
     return fetchApi<{ message: string }>(`/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' });
   },

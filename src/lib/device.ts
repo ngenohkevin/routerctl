@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { prettyBand } from '@/lib/utils';
-import type { Device, IdentifiedBy } from '@/types';
+import type { Device, DeviceAdapter, IdentifiedBy } from '@/types';
 
 /** Types the owner can pick when correcting a device. */
 export const DEVICE_TYPES: { value: string; label: string }[] = [
@@ -49,6 +49,43 @@ export const IDENTIFIED_BY: Record<IdentifiedBy, string> = {
 };
 
 export const isOnline = (d: Device) => d.status === 'bound' || d.status === 'dynamic';
+
+/** A private/randomized MAC (second hex digit 2, 6, A or E). */
+export function randomizedMac(mac: string): boolean {
+  return mac.length >= 2 && '26AE'.includes(mac[1].toUpperCase());
+}
+
+const MOBILE_TYPES = ['phone', 'tablet', 'mobile', 'watch', 'apple', 'android'];
+
+/**
+ * On Wi-Fi rather than a cable. The agent knows from the port it was learned
+ * on; without that, a signal, a phone-like type or a private MAC says Wi-Fi.
+ */
+export function isWiFi(d: Device): boolean {
+  if (d.link) return d.link === 'wifi';
+  return !!d.signalStrength || MOBILE_TYPES.includes(d.deviceType?.toLowerCase() || '') || randomizedMac(d.mac);
+}
+
+/** The adapter an automatic link brought in, while it awaits review. */
+export function pendingAdapter(d: Device): DeviceAdapter | undefined {
+  return d.adapters?.find((a) => a.pending);
+}
+
+/** New on the network, or linked to another adapter and awaiting review. */
+export const needsReview = (d: Device) => !!d.isNew || !!pendingAdapter(d);
+
+/** "Ethernet · port 3", "Wi-Fi · 5 GHz", or just the kind of link. */
+export function adapterLabel(a: Pick<DeviceAdapter, 'link' | 'port' | 'band'>): string {
+  if (a.link === 'ethernet') {
+    const n = a.port?.match(/^ether(\d+)$/i)?.[1];
+    return n ? `Ethernet · port ${n}` : 'Ethernet';
+  }
+  if (a.link === 'wifi') {
+    const band = prettyBand(a.band);
+    return band ? `Wi-Fi · ${band}` : 'Wi-Fi';
+  }
+  return 'Adapter';
+}
 
 /**
  * A hostname as a person would write it: "Kevin-s-S26-Ultra" → "Kevin's S26
@@ -122,7 +159,7 @@ export function glyphFor(d: Device): LucideIcon {
 /** Wi-Fi band or wired, in plain words. */
 export function connectionLabel(d: Device): string {
   if (d.band) return prettyBand(d.band) ?? 'Wi-Fi';
-  if (d.interface?.startsWith('wifi')) return 'Wi-Fi';
+  if (d.link === 'wifi' || d.interface?.startsWith('wifi')) return 'Wi-Fi';
   return 'Wired';
 }
 

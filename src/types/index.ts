@@ -46,6 +46,11 @@ export interface Device {
 
   // Identification detail
   os?: string;            // from the DHCP vendor class ("Android 14")
+  classId?: string;       // that vendor class as sent ("android-dhcp-14")
+  // Where it is connected: the bridge port it was last learned on
+  // ("ether3", "wifi2"), and what that is. Unset when the agent doesn't know.
+  port?: string;
+  link?: 'wifi' | 'ethernet';
   identifiedBy?: IdentifiedBy;
   randomMac?: boolean;    // private/randomized address: the MAC names no maker
   reserved?: boolean;     // the IP is a static lease on the router
@@ -60,6 +65,26 @@ export interface Device {
   isNew?: boolean;        // joined since the list was last reviewed
   policy?: DevicePolicy;  // follows the device's MAC across IP changes
   remembered?: boolean;   // known only from the registry (left the network)
+  // A device with several network adapters (a TV's Wi-Fi and Ethernet) is
+  // one device: mac is its main record's, ip and the connection are the
+  // adapter in use, and every adapter is listed here, the main one first.
+  adapters?: DeviceAdapter[];
+}
+
+export interface DeviceAdapter {
+  mac: string;
+  ip?: string;
+  status: string;
+  link?: 'wifi' | 'ethernet';
+  port?: string;
+  band?: string;
+  signalDbm?: number;
+  lastSeen: string;
+  main?: boolean;
+  linkedBy?: 'auto' | 'you';
+  linkedAt?: string;
+  /** Linked automatically; waiting for the owner to keep or undo it. */
+  pending?: boolean;
 }
 
 export type IdentifiedBy = 'you' | 'hostname' | 'mdns' | 'dhcp' | 'vendor';

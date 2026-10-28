@@ -32,6 +32,7 @@ import { useUps } from '@/stores/ups';
 import { usePower } from '@/stores/power';
 import { toast } from 'sonner';
 import type { Device } from '@/types';
+import { isWiFi } from '@/lib/device';
 
 type DeviceFilter = 'all' | 'wifi' | 'ethernet' | 'disconnected' | 'blocked';
 
@@ -201,19 +202,8 @@ export default function Dashboard() {
     }
   };
 
-  // Check if MAC uses randomized/private addressing (2nd hex digit is 2, 6, A, or E)
-  const hasRandomizedMAC = (mac: string) => {
-    if (mac.length < 2) return false;
-    const ch = mac[1].toUpperCase();
-    return ch === '2' || ch === '6' || ch === 'A' || ch === 'E';
-  };
-
-  // Helper to check if device is WiFi (has signal, is mobile type, or has randomized MAC)
-  const mobileTypes = ['phone', 'tablet', 'mobile', 'watch', 'apple', 'android'];
-  const isWifiDevice = (d: Device) =>
-    !!d.signalStrength ||
-    mobileTypes.includes(d.deviceType?.toLowerCase() || '') ||
-    hasRandomizedMAC(d.mac);
+  // Wi-Fi or wired: the agent's port when it knows it, else a guess.
+  const isWifiDevice = isWiFi;
 
   // Exclude WAN-side devices (ISP CPEs on any uplink — agent tags them)
   const lanDevices = devices.filter((d) => !d.wanSide && d.interface !== 'WAN');

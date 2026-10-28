@@ -33,6 +33,9 @@ interface DevicesState {
   updateProfile: (mac: string, patch: DeviceProfilePatch) => Promise<void>;
   acknowledge: (mac?: string) => Promise<void>;
   forgetDevice: (mac: string) => Promise<void>;
+  linkDevice: (mac: string, withMac: string) => Promise<void>;
+  unlinkDevice: (mac: string) => Promise<void>;
+  keepLink: (adapterMac: string) => Promise<void>;
   setDevicePriority: (mac: string, priority: number) => Promise<void>;
   removeDevicePriority: (mac: string) => Promise<void>;
   wakeOnLan: (mac: string) => Promise<void>;
@@ -241,6 +244,22 @@ export const useDevicesStore = create<DevicesState>((set, get) => ({
   forgetDevice: async (mac: string) => {
     await api.forgetDevice(mac);
     set((state) => ({ devices: state.devices.filter((d) => d.mac !== mac) }));
+  },
+
+  linkDevice: async (mac: string, withMac: string) => {
+    await api.linkDevice(mac, withMac);
+    await get().fetchDevices();
+  },
+
+  unlinkDevice: async (mac: string) => {
+    await api.unlinkDevice(mac);
+    await get().fetchDevices();
+  },
+
+  // Keeping an automatic link is reviewing the adapter it brought in.
+  keepLink: async (adapterMac: string) => {
+    await api.acknowledgeDevices(adapterMac);
+    await get().fetchDevices();
   },
 
   setDevicePriority: async (mac: string, priority: number) => {

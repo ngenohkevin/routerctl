@@ -36,15 +36,8 @@ import {
 import type { Device } from '@/types';
 import { cn, formatBandwidth, formatDuration, prettyBand } from '@/lib/utils';
 import { timeAgo } from '@/components/device-detail-dialog';
-import { displayName, glyphFor, identityLine } from '@/lib/device';
+import { displayName, glyphFor, identityLine, isWiFi, pendingAdapter } from '@/lib/device';
 import { usePower } from '@/stores/power';
-
-// Randomized/private MACs (2nd hex digit 2, 6, A or E) are phones and laptops on Wi-Fi.
-function hasRandomizedMAC(mac: string): boolean {
-  if (mac.length < 2) return false;
-  const c = mac[1].toUpperCase();
-  return c === '2' || c === '6' || c === 'A' || c === 'E';
-}
 
 function formatRate(rate: string | undefined): string | null {
   const n = parseInt(rate || '0', 10);
@@ -96,11 +89,8 @@ export function DeviceCard({
   const [isLoading, setIsLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'block' | 'disconnect' | null>(null);
 
-  const mobileTypes = ['phone', 'tablet', 'mobile', 'watch', 'apple', 'android'];
-  const isWifi =
-    !!device.signalStrength ||
-    mobileTypes.includes(device.deviceType?.toLowerCase() || '') ||
-    hasRandomizedMAC(device.mac);
+  const isWifi = isWiFi(device);
+  const linkToReview = !!pendingAdapter(device);
   const isWan = device.wanSide || device.interface === 'WAN';
   const isOnline = device.status === 'bound' || device.status === 'dynamic';
   const name = displayName(device);
@@ -257,7 +247,7 @@ export function DeviceCard({
       </div>
 
       {/* State chips */}
-      {(device.isBlocked || device.isExempt || hasPriority || device.hasBWLimit || (isOnline && isWifi && band) || powerPlug) && (
+      {(device.isBlocked || device.isExempt || hasPriority || device.hasBWLimit || (isOnline && isWifi && band) || powerPlug || linkToReview) && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {powerPlug && (
             <Link href="/power" className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-link/50">
@@ -265,6 +255,7 @@ export function DeviceCard({
             </Link>
           )}
           {device.isNew && <Chip tone="amber">New</Chip>}
+          {linkToReview && <Chip tone="amber">Second adapter linked</Chip>}
           {device.isBlocked && <Chip tone="fault">Internet blocked</Chip>}
           {isOnline && isWifi && band && <Chip tone="air">{band}</Chip>}
           {hasPriority && (
