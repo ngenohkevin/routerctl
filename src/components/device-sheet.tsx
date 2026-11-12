@@ -550,7 +550,7 @@ export function DeviceSheet({ device, open, onOpenChange, defaultLimit }: Device
                 ? 'It loses internet access until you unblock it, even if it gets a new address.'
                 : confirm === 'disconnect'
                   ? 'It is dropped from Wi-Fi. Most devices reconnect on their own within seconds.'
-                  : 'Its name, notes and history are removed. If it joins again it shows up as a new device.'}
+                  : `Its name, notes and history are removed${forgetPolicyText(device)}. If it joins again it shows up as a new device.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -585,3 +585,17 @@ function formatBytes(v?: string): string {
   if (n >= 1e6) return `${(n / 1e6).toFixed(0)} MB`;
   return `${Math.round(n / 1e3)} KB`;
 }
+
+/** What of the device's policy forgetting it takes off the router: a remembered device's policy goes with it. */
+function forgetPolicyText(device: Device): string {
+  const p = device.remembered ? device.policy : undefined;
+  const what = [
+    p?.mode === 'exempt' ? 'exemption' : p?.mode === 'limit' ? 'speed limit' : null,
+    p?.priority ? 'priority' : null,
+    p?.blocked ? 'block' : null,
+  ].filter(Boolean);
+  if (what.length === 0) return '';
+  const list = what.length === 1 ? what[0] : `${what.slice(0, -1).join(', ')} and ${what[what.length - 1]}`;
+  return `, and so is its ${list}`;
+}
+
