@@ -125,25 +125,17 @@ export function deltaLine(d: PowerDelta | null | undefined, settings?: Partial<P
         ? ['On mains', charging, d.fullInSec != null ? `full in about ${formatDuration(d.fullInSec)}` : null]
         : ['On mains', pct];
   parts.push(d.outW != null ? `load ${d.outW} W` : d.wattsError ? 'no watts' : null, d.tempC != null ? `${d.tempC} °C` : null);
-  parts.push(d.source === 'bluetooth' ? 'over Bluetooth' : null);
+  parts.push(d.source === 'usb' && d.bluetoothError ? 'over USB' : null);
   return parts.filter(Boolean).join(' · ');
 }
 
 /**
- * How the Delta is being read, when it matters: over Bluetooth because USB isn't answering (with what to do
- * when its USB outputs are off, which takes the USB link down), or Bluetooth failing while USB works.
+ * How the Delta is being read, when it matters. The Pi reads it over Bluetooth first (its USB link drops out and
+ * comes back only when the Delta restarts), so only USB standing in, while Bluetooth isn't reading, gets a note.
  */
 export function deltaSourceNote(d: PowerDelta | null | undefined): string | null {
-  if (!d?.available) return null;
-  if (d.source === 'bluetooth') {
-    let note = 'Read over Bluetooth: the Delta isn’t answering over USB.';
-    if (d.usbOutputsOff) {
-      const timeout = d.usbTimeoutMin ? ` (it now switches them off after ${formatDuration(d.usbTimeoutMin * 60)} idle)` : '';
-      note += ` Its USB outputs are switched off, and its USB link goes with them: press the USB button on the Delta, and set its DC/USB timeout to Never in the EcoFlow app${timeout}.`;
-    }
-    return note;
-  }
-  return d.bluetoothError ? `Bluetooth isn’t reading the Delta: ${d.bluetoothError}.` : null;
+  if (!d?.available || d.source !== 'usb' || !d.bluetoothError) return null;
+  return `Read over USB: Bluetooth isn’t reading the Delta (${d.bluetoothError}).`;
 }
 
 /** "TV group is on and in use", "TV group is on standby", from the Delta's load; plain "on" when the Pi can't tell. */

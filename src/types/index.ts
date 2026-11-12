@@ -801,21 +801,22 @@ export interface PowerDelta {
   inW?: number;
   /** Charging: input minus output. */
   chargeW?: number;
-  /** The hottest of the four temperatures it reports, °C. */
+  /** °C: the battery cells' over Bluetooth, or the hottest of the four the serial port reports. */
   tempC?: number;
+  /** EMS firmware, from the serial port. */
   firmware?: string;
-  /** The serial port is read but gave nothing for 30 s. */
+  /** Bluetooth is quiet and the serial port gave nothing for 30 s. */
   wattsError?: string;
-  // Bluetooth (agents since 2026-10-24).
-  /** Where the reading came from: USB (NUT) or Bluetooth (when USB isn't answering). */
+  // Bluetooth (agents since 2026-10-24; read first since 2026-11-12).
+  /** Where the reading came from: Bluetooth, or USB (NUT) while Bluetooth isn't reading. */
   source?: 'usb' | 'bluetooth';
-  /** Read over Bluetooth because USB isn't answering: why not. */
+  /** USB, the stand-in, isn't reading: why not. */
   usbError?: string;
-  /** Bluetooth is set up but not reading: why not. */
+  /** Bluetooth is set up but not reading (USB stands in, if it can): why not. */
   bluetoothError?: string;
   /** The discharge limit set in the EcoFlow app, as the Delta reports it over Bluetooth. */
   dischargeLimit?: number;
-  /** Over Bluetooth: the Delta's USB outputs are off, and its USB link to the Pi with them. */
+  /** Over Bluetooth: the Delta's USB outputs are off (its USB data link to the Pi doesn't depend on them). */
   usbOutputsOff?: boolean;
   /** Its idle timeout for the USB outputs, in minutes (omitted when it's Never). */
   usbTimeoutMin?: number;
