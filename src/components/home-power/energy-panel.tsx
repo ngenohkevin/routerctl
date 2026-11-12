@@ -7,6 +7,8 @@ import { formatDuration } from '@/lib/power';
 import { costText, energyTotals, kwh, type EnergyTotal } from '@/lib/home-power';
 import type { PowerEnergyDay } from '@/types';
 
+const dayCount = (n: number) => (n === 1 ? '1 day' : `${n} days`);
+
 function Period({ label, t, tariff, span }: { label: string; t: EnergyTotal | null; tariff?: number; span: string }) {
   if (!t) {
     return (
@@ -54,8 +56,8 @@ export function EnergyPanel({ days, tariffKSh, loading }: { days: PowerEnergyDay
           <ul className="divide-y divide-hairline-soft">
             <Period label="Today" t={t.today} tariff={tariffKSh} span=" so far" />
             <Period label="Yesterday" t={t.yesterday} tariff={tariffKSh} span="" />
-            <Period label="Last 7 days" t={t.week} tariff={tariffKSh} span={t.week ? ` over ${t.week.days} days` : ''} />
-            <Period label="Last 30 days" t={t.month} tariff={tariffKSh} span={t.month ? ` over ${t.month.days} days` : ''} />
+            <Period label="Last 7 days" t={t.week} tariff={tariffKSh} span={t.week ? ` over ${dayCount(t.week.days)}` : ''} />
+            <Period label="Last 30 days" t={t.month} tariff={tariffKSh} span={t.month ? ` over ${dayCount(t.month.days)}` : ''} />
           </ul>
           <p className="text-xs text-ink-3">
             Used is what the network and the TV group drew from the Delta. Wall is what the Delta drew from the socket, charging
