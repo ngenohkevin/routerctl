@@ -29,6 +29,7 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
   const [quietStart, setQuietStart] = useState('23:00');
   const [quietEnd, setQuietEnd] = useState('07:00');
   const [dischargeLimit, setDischargeLimit] = useState('0');
+  const [tariff, setTariff] = useState('0');
   const [loadedFrom, setLoadedFrom] = useState<string | null>(null);
   const [minutes, setMinutes] = useState<5 | 15 | 30>(5);
   const [quick, setQuick] = useState(true);
@@ -42,6 +43,7 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
     setQuietStart(s.settings.quietStart);
     setQuietEnd(s.settings.quietEnd);
     setDischargeLimit(String(s.settings.dischargeLimit ?? 0));
+    setTariff(String(s.settings.tariffKSh ?? 0));
     setLoadedFrom(s.updatedAt ?? 'loaded');
   }, [s, loadedFrom]);
 
@@ -50,11 +52,17 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
   const { ceiling } = deltaLimits(s?.delta, s?.settings);
   const learned = s?.delta?.chargeLimit !== undefined; // agents since 2026-10-23 learn it
   const fromDelta = s?.delta?.dischargeLimit; // read over Bluetooth (agents since 2026-10-24)
+  const tariffKnown = s?.settings.tariffKSh !== undefined; // agents since 2026-11-12
 
   async function save() {
     const problem = limitsKnown && fromDelta == null ? limitsProblem(dischargeLimit) : null;
     if (problem) {
       toast.error(problem);
+      return;
+    }
+    const price = Number(tariff);
+    if (tariffKnown && (tariff.trim() === '' || !Number.isFinite(price) || price < 0 || price > 200)) {
+      toast.error('The electricity price must be 0 to 200 KSh/kWh.');
       return;
     }
     setBusy(true);
@@ -65,6 +73,7 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
           quietStart,
           quietEnd,
           ...(limitsKnown ? { dischargeLimit: fromDelta ?? Number(dischargeLimit) } : {}),
+          ...(tariffKnown ? { tariffKSh: price } : {}),
         }),
       );
       toast.success('Settings saved');
@@ -151,6 +160,26 @@ export function PowerSettingsPanel({ status: s, onChanged }: { status: PowerStat
         </>
       ) : (
         <p className="text-xs text-ink-3">The Delta’s discharge limit can be set here once the agent on the Pi is updated.</p>
+      )}
+      {tariffKnown && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="power-tariff">Electricity price (KSh/kWh)</Label>
+            <Input
+              id="power-tariff"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={200}
+              step="0.01"
+              value={tariff}
+              onChange={(e) => setTariff(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+      {tariffKnown && (
+        <p className="text-xs text-ink-3">For the cost on the Energy panel: what a kWh from the wall costs you. 0 shows no cost.</p>
       )}
       <Button size="sm" className={TOUCH} onClick={save} disabled={busy}>
         Save settings

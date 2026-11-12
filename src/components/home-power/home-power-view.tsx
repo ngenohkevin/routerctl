@@ -10,6 +10,8 @@ import { PlugsPanel } from './plugs-panel';
 import { PowerTimeline } from './power-timeline';
 import { CutList } from './cut-list';
 import { PowerSettingsPanel } from './settings-panel';
+import { DeltaPanel } from './delta-panel';
+import { EnergyPanel } from './energy-panel';
 
 /** The Power page for the Delta and the two Tapo plugs. */
 export function HomePowerView() {
@@ -42,11 +44,15 @@ export function HomePowerView() {
     <div className="space-y-6">
       <PageHeader
         title="Power"
-        description="The Delta keeps the network and the TV group running in a power cut. The Pi reads the Delta over USB to tell when it’s on battery, and switches the TV group off when its time is up."
+        description="The Delta keeps the network and the TV group running in a power cut. The Pi reads the Delta over Bluetooth (USB stands in) to tell when it’s on battery, and switches the TV group off when its time is up."
       />
       <PowerStatusPanel status={s} failed={failed} loaded={loaded} onChanged={changed} />
+      {(!loaded || s?.delta) && <DeltaPanel delta={s?.delta} problems={s?.problems ?? []} loading={!loaded} />}
       <PlugsPanel plugs={s?.plugs ?? []} problems={s?.problems ?? []} inCut={!!s?.cut && !s.cut.test} loading={!loaded} />
       <PowerTimeline series={history?.series ?? []} loading={!history} />
+      {(!history || history.energy) && (
+        <EnergyPanel days={history?.energy ?? []} tariffKSh={s?.settings.tariffKSh} loading={!history} />
+      )}
       <CutList cuts={history?.cuts ?? []} events={history?.events ?? []} since={history?.since ?? null} loading={!history} />
       <PowerSettingsPanel status={s} onChanged={changed} />
     </div>

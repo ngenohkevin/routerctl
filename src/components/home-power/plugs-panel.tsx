@@ -6,7 +6,7 @@ import { Led } from '@/components/shell/led';
 import { Chip } from '@/components/shell/chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { dayClock } from '@/lib/power';
-import { signalText } from '@/lib/home-power';
+import { isDeltaProblem, signalText } from '@/lib/home-power';
 import type { PowerPlug, PowerProblem } from '@/types';
 
 const WHERE: Record<string, string> = { tv: 'on the Delta: TV and soundbar', mains: 'wall socket, feeds the Delta' };
@@ -60,7 +60,7 @@ export function PlugsPanel({
           })}
         </ul>
       )}
-      {problems.map((pr) => (
+      {problems.filter((pr) => !isDeltaProblem(pr.code)).map((pr) => (
         <p key={`${pr.code}-${pr.role ?? ''}`} className="text-sm text-amber">
           {pr.text}
         </p>

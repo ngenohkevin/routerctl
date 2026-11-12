@@ -1,5 +1,14 @@
 import type { LedTone } from '@/components/shell/led';
-import type { PowerCut, PowerCutView, PowerDelta, PowerEvent, PowerSettings, PowerStatus } from '@/types';
+import type {
+  PowerCut,
+  PowerCutView,
+  PowerDelta,
+  PowerDeltaSettings,
+  PowerEnergyDay,
+  PowerEvent,
+  PowerSettings,
+  PowerStatus,
+} from '@/types';
 import { clock, dayClock, formatDuration, secondsSince } from '@/lib/power';
 
 /** Problems that stop the switch-off or the detection from working. */
@@ -218,6 +227,13 @@ export function cutDetail(c: PowerCut): string[] {
   const out: string[] = [];
   if (c.cause === 'supply') out.push('The house had power, but the Delta wasn’t getting it: the power guard, or the Delta’s charging cable.');
   if (c.cause === 'mains_off') out.push('The Mains plug was switched off.');
+  if (c.wallW != null) {
+    out.push(
+      c.chargingW
+        ? `Before it: drawing ${c.wallW} W from the wall, ${c.chargingW} W of it charging.`
+        : `Before it: drawing ${c.wallW} W from the wall.`,
+    );
+  }
   if (c.startCharge != null && c.lowestCharge != null) {
     const used = c.startCharge - c.lowestCharge;
     if (!c.end) out.push(used <= 0 ? `Delta at ${c.startCharge}% so far.` : `Delta ${c.startCharge}% → ${c.lowestCharge}% so far.`);
@@ -256,7 +272,99 @@ export function eventText(e: PowerEvent): string {
       return `Settings changed: ${e.note ?? ''}`.trim();
     case 'plug':
       return `${PLUG[e.detail] ?? e.detail}${e.note ? `: ${e.note}` : ''}${e.ok ? '' : ', failed'}`;
+    case 'delta':
+      return e.detail === 'setting' ? `Delta setting: ${e.note ?? ''}`.trim() : (e.note ?? e.detail);
     default:
       return e.note ?? e.detail;
   }
+}
+
+/** The Delta's own problems (faults, heat, settings, unreadable): shown on the Delta panel, not under the plugs. */
+export function isDeltaProblem(code: string): boolean {
+  return code.startsWith('delta_');
+}
+
+/** A timeout from the EcoFlow app: 0 is Never. */
+export function timeoutText(min: number | undefined): string {
+  if (min == null) return '—';
+  if (min === 0) return 'Never';
+  if (min >= 60 && min % 60 === 0) return `${min / 60} h`;
+  return `${min} min`;
+}
+
+/** How the Delta charges from the wall. The custom speed caps it only in custom mode. */
+export function chargingText(s: PowerDeltaSettings | undefined): string | null {
+  switch (s?.chargeMode) {
+    case 'custom':
+      return s.chargeMaxW ? `Charges from the wall at up to ${s.chargeMaxW} W (custom speed).` : 'Charges from the wall at a custom speed.';
+    case 'optimal':
+      return 'Battery-optimal charging: the Delta picks its own speed from the wall.';
+    case 'silent':
+      return 'Silent charging: slower, with less fan noise.';
+    case 'unknown':
+      return 'A charging mode the Pi doesn’t know (newer firmware?).';
+  }
+  return null;
+}
+
+export interface EnergyTotal {
+  loadWh: number;
+  wallWh: number;
+  batteryWh: number;
+  chargedWh: number;
+  tvInUseSec: number;
+  measuredSec: number;
+  days: number; // how many days had any reading
+}
+
+/** YYYY-MM-DD in local time. */
+export function localDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function daysBefore(today: Date, n: number): string {
+  const d = new Date(today);
+  d.setDate(d.getDate() - n);
+  return localDate(d);
+}
+
+function sumDays(days: PowerEnergyDay[], keep: (date: string) => boolean): EnergyTotal | null {
+  const picked = days.filter((d) => keep(d.date) && d.measuredSec > 0);
+  if (picked.length === 0) return null;
+  const t: EnergyTotal = { loadWh: 0, wallWh: 0, batteryWh: 0, chargedWh: 0, tvInUseSec: 0, measuredSec: 0, days: picked.length };
+  for (const d of picked) {
+    t.loadWh += d.loadWh;
+    t.wallWh += d.wallWh;
+    t.batteryWh += d.batteryWh;
+    t.chargedWh += d.chargedWh;
+    t.tvInUseSec += d.tvInUseSec;
+    t.measuredSec += d.measuredSec;
+  }
+  return t;
+}
+
+/** Today, yesterday, and the last 7 and 30 days (today included); null where nothing was measured. */
+export function energyTotals(days: PowerEnergyDay[], today: Date = new Date()) {
+  const t = localDate(today);
+  const y = daysBefore(today, 1);
+  const w = daysBefore(today, 7);
+  const m = daysBefore(today, 30);
+  return {
+    today: sumDays(days, (d) => d === t),
+    yesterday: sumDays(days, (d) => d === y),
+    week: sumDays(days, (d) => d > w && d <= t),
+    month: sumDays(days, (d) => d > m && d <= t),
+  };
+}
+
+/** "0.52 kWh". */
+export function kwh(wh: number): string {
+  return `${(wh / 1000).toFixed(2)} kWh`;
+}
+
+/** The cost of wh from the wall, or null without a price. */
+export function costText(wh: number, tariffKSh: number | undefined): string | null {
+  if (!tariffKSh) return null;
+  const v = (wh / 1000) * tariffKSh;
+  return `KSh ${v < 10 ? v.toFixed(2) : Math.round(v).toLocaleString()}`;
 }

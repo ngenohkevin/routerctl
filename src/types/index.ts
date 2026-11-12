@@ -712,6 +712,8 @@ export interface PowerSettings {
   quietEnd: string;
   /** The Delta's discharge limit as set in the EcoFlow app (it doesn't report it); absent from an older agent. */
   dischargeLimit?: number; // 0–30: it switches its sockets off here
+  /** What a kWh from the wall costs, KSh (0–200; 0 shows no cost). Agents since 2026-11-12. */
+  tariffKSh?: number;
   /** Only from the agent of 2026-10-22, where it was typed in; newer agents learn it (PowerDelta.chargeLimit). */
   chargeLimit?: number;
 }
@@ -744,6 +746,9 @@ export interface PowerCut {
   lowestCharge?: number;
   /** The Delta's % at the cut's first reading (its start, unless the Delta couldn't be read then). */
   startCharge?: number;
+  /** What the Delta drew in the 2 minutes before the cut: all from the wall, and the part charging (agents since 2026-11-12). */
+  wallW?: number;
+  chargingW?: number;
 }
 
 export interface PowerStatus {
@@ -820,6 +825,55 @@ export interface PowerDelta {
   usbOutputsOff?: boolean;
   /** Its idle timeout for the USB outputs, in minutes (omitted when it's Never). */
   usbTimeoutMin?: number;
+  /** Faults, heat, charging and settings: only while Bluetooth is reading (agents since 2026-11-12). */
+  insights?: PowerDeltaInsights;
+}
+
+/** A non-zero fault code the Delta reports: the part, and the field it came in. */
+export interface PowerDeltaFault {
+  part: string;
+  field: string;
+  code: number;
+}
+
+/** The settings made in the EcoFlow app, as the Delta reports them. Timeouts in minutes, 0 = Never; absent = not sent yet. */
+export interface PowerDeltaSettings {
+  acTimeoutMin?: number;
+  unitTimeoutMin?: number;
+  /** The USB/DC outputs. */
+  dcTimeoutMin?: number;
+  /** custom = up to chargeMaxW; optimal = battery-optimal (the Delta picks the speed); unknown = a value newer firmware added. */
+  chargeMode?: 'custom' | 'optimal' | 'silent' | 'unknown';
+  chargeMaxW?: number;
+  beep?: boolean;
+  xBoost?: boolean;
+  bypassOff?: boolean;
+  outputMemory?: boolean;
+}
+
+export interface PowerDeltaInsights {
+  /** Empty: no fault codes. */
+  faults: PowerDeltaFault[] | null;
+  /** The hottest cell, and the battery's hottest power transistor (MOS). */
+  cellTempC?: number;
+  mosTempC?: number;
+  settings: PowerDeltaSettings;
+}
+
+/** One local day of energy through the Delta. */
+export interface PowerEnergyDay {
+  date: string; // YYYY-MM-DD
+  /** What its outputs delivered: the network and the TV group. */
+  loadWh: number;
+  /** What it drew from the wall, charging included. */
+  wallWh: number;
+  /** What the battery delivered in cuts. */
+  batteryWh: number;
+  /** What went into charging. */
+  chargedWh: number;
+  tvInUseSec: number;
+  /** How much of the day had readings. */
+  measuredSec: number;
 }
 
 export interface PowerEvent {
@@ -846,6 +900,8 @@ export interface PowerHistory {
   cuts: PowerCut[] | null;
   events: PowerEvent[] | null;
   series: PowerPoint[] | null;
+  /** Oldest first, today last (agents since 2026-11-12). */
+  energy?: PowerEnergyDay[] | null;
   since: string | null;
 }
 
