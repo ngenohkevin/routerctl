@@ -9,7 +9,7 @@ import { dayClock } from '@/lib/power';
 import { signalText } from '@/lib/home-power';
 import type { PowerPlug, PowerProblem } from '@/types';
 
-const WHERE: Record<string, string> = { tv: 'on the Delta: TV, soundbar, Mi Box', mains: 'wall socket, feeds the Delta' };
+const WHERE: Record<string, string> = { tv: 'on the Delta: TV and soundbar', mains: 'wall socket, feeds the Delta' };
 
 export function PlugsPanel({
   plugs,
